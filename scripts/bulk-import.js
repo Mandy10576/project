@@ -114,7 +114,7 @@ async function bulkImport(searchTerm) {
 
         // Convert USD price to INR if it is low (less than 250)
         if (product.price < 250) {
-          product.price = Math.round(product.price * 83.0 * 100) / 100;
+          product.price = Math.round(product.price * 95.0 * 100) / 100;
         }
 
         const id = `bulk-puppeteer-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
@@ -168,7 +168,7 @@ async function runFallback(searchTerm) {
     console.log(`📦 Found ${rawList.length} products. Saving to PostgreSQL...`);
     for (const item of rawList) {
       const id = `bulk-dj-${item.id}`;
-      const priceInInr = Math.round(item.price * 83.0 * 100) / 100;
+      const priceInInr = Math.round(item.price * 95.0 * 100) / 100;
       const name = item.title.substring(0, 250);
       const description = item.description || 'No description available.';
       const image = item.thumbnail || 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=500';

@@ -8,6 +8,9 @@ const state = {
   cart: { items: [], totalPrice: 0 },
   user: null,
   token: localStorage.getItem('aether_token') || null,
+  currentProduct: null,
+  deliveryAddress: localStorage.getItem('aether_delivery_address') || '',
+  deliveryPincode: localStorage.getItem('aether_delivery_pincode') || '',
   filters: {
     category: 'all',
     search: '',
@@ -294,6 +297,15 @@ function logout() {
   state.cart = { items: [], totalPrice: 0 };
   localStorage.removeItem('aether_token');
   
+  // Clear delivery address details on logout
+  state.deliveryAddress = '';
+  state.deliveryPincode = '';
+  localStorage.removeItem('aether_delivery_address');
+  localStorage.removeItem('aether_delivery_pincode');
+  document.getElementById('header-location-text').textContent = 'Add Address';
+  document.getElementById('modal-address-input').value = '';
+  document.getElementById('modal-pincode-input').value = '';
+
   showToast('Logged out successfully');
   updateAuthUI();
   updateCartBadge();
@@ -340,6 +352,7 @@ function renderProducts() {
   state.products.forEach(product => {
     const card = document.createElement('article');
     card.className = 'product-card';
+    card.style.cursor = 'pointer';
 
     // Stock tag coloring
     let stockClass = 'in-stock';
@@ -370,6 +383,13 @@ function renderProducts() {
       </div>
     `;
 
+    card.addEventListener('click', (e) => {
+      if (e.target.closest('.add-to-cart-btn')) {
+        return; // Clicked add to cart button inside card
+      }
+      openProductDetails(product.id);
+    });
+
     grid.appendChild(card);
   });
 
@@ -379,6 +399,210 @@ function renderProducts() {
       const productId = e.target.getAttribute('data-id');
       handleAddToCart(productId);
     });
+  });
+}
+
+// ==========================================================================
+// PRODUCT DETAIL VIEW LOGIC
+// ==========================================================================
+async function openProductDetails(productId) {
+  try {
+    const product = await apiRequest(`/api/products/${productId}`);
+    state.currentProduct = product;
+
+    // Set text elements
+    document.getElementById('detail-image').src = product.imageUrl;
+    document.getElementById('detail-image').alt = product.name;
+    document.getElementById('detail-category').textContent = product.category;
+    document.getElementById('detail-title').textContent = product.name;
+    document.getElementById('detail-desc').textContent = product.description;
+    document.getElementById('detail-price').textContent = `₹${product.price.toFixed(2)}`;
+
+    // Stock label color & text
+    const stockTag = document.getElementById('detail-stock-tag');
+    stockTag.className = 'stock-tag'; // reset classes
+    const addBtn = document.getElementById('detail-add-btn');
+    addBtn.disabled = false;
+    addBtn.textContent = 'Add to Bag';
+
+    if (product.stock === 0) {
+      stockTag.classList.add('out-of-stock');
+      stockTag.textContent = 'Out of Stock';
+      addBtn.disabled = true;
+      addBtn.textContent = 'Sold Out';
+    } else if (product.stock <= 5) {
+      stockTag.classList.add('low-stock');
+      stockTag.textContent = `Only ${product.stock} left!`;
+    } else {
+      stockTag.classList.add('in-stock');
+      stockTag.textContent = `${product.stock} in stock`;
+    }
+
+    // Reset Quantity field
+    const qtyInput = document.getElementById('detail-quantity');
+    qtyInput.value = '1';
+
+    // Auto-fill Pincode Checker if saved in address section
+    const pinField = document.getElementById('detail-pincode-input');
+    const pinStatus = document.getElementById('detail-pincode-status');
+    if (state.deliveryPincode) {
+      pinField.value = state.deliveryPincode;
+      checkPincodeAvailability(state.deliveryPincode);
+    } else {
+      pinField.value = '';
+      pinStatus.style.display = 'none';
+    }
+
+    // Related products grid
+    renderRelatedProducts(product);
+
+    // Switch section
+    switchSection('product-detail-section');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  } catch (error) {
+    showToast(`Error loading product: ${error.message}`, 'error');
+  }
+}
+
+async function checkPincodeAvailability(pincode) {
+  const statusDiv = document.getElementById('detail-pincode-status');
+  if (!pincode) {
+    statusDiv.style.display = 'none';
+    return;
+  }
+
+  if (!/^\d{6}$/.test(pincode)) {
+    statusDiv.style.display = 'flex';
+    statusDiv.style.color = '#ef4444'; // Red
+    statusDiv.innerHTML = `
+      <svg viewBox="0 0 24 24" width="14" height="14" style="color: #ef4444; flex-shrink: 0;"><path fill="none" d="M0 0h24v24H0z"/><path d="M12 22C6.477 22 2 17.523 2 12S6.477 2 12 2s10 4.477 10 10-4.477 10-10 10zm-1-7v2h2v-2h-2zm0-8v6h2V7h-2z" fill="currentColor"/></svg>
+      <span>Please enter a valid 6-digit Pincode.</span>
+    `;
+    return;
+  }
+
+  // Show checking loader with spin animation
+  statusDiv.style.display = 'flex';
+  statusDiv.style.color = 'var(--text-gray)';
+  statusDiv.innerHTML = `
+    <span style="border: 2px solid rgba(255,255,255,0.1); border-top: 2px solid var(--accent-cyan); border-radius: 50%; width: 14px; height: 14px; display: inline-block; animation: spin 1s linear infinite; margin-right: 6px; flex-shrink: 0;"></span>
+    <span>Checking availability...</span>
+  `;
+
+  // Local lookup fallback map
+  const PINCODE_MAP_FALLBACK = {
+    '394230': 'Surat, Gujarat',
+    '395007': 'Surat, Gujarat',
+    '395001': 'Surat, Gujarat',
+    '395003': 'Surat, Gujarat',
+    '110001': 'New Delhi, Delhi',
+    '110002': 'Delhi, Delhi',
+    '400001': 'Mumbai, Maharashtra',
+    '400002': 'Mumbai, Maharashtra',
+    '560001': 'Bengaluru, Karnataka',
+    '600001': 'Chennai, Tamil Nadu',
+    '700001': 'Kolkata, West Bengal',
+    '500001': 'Hyderabad, Telangana',
+    '380001': 'Ahmedabad, Gujarat',
+    '390001': 'Vadodara, Gujarat',
+    '302001': 'Jaipur, Rajasthan',
+    '122001': 'Gurugram, Haryana',
+    '201301': 'Noida, Uttar Pradesh'
+  };
+
+  try {
+    const res = await fetch(`https://api.postalpincode.in/pincode/${pincode}`);
+    const data = await res.json();
+
+    if (data && data[0] && data[0].Status === 'Success' && data[0].PostOffice) {
+      const postOffice = data[0].PostOffice[0];
+      const district = postOffice.District;
+      const stateName = postOffice.State;
+      const location = `${district}, ${stateName}`;
+      const days = (parseInt(pincode[5]) % 3) + 2; 
+
+      statusDiv.style.display = 'flex';
+      statusDiv.style.color = '#22c55e'; // Green
+      statusDiv.innerHTML = `
+        <svg viewBox="0 0 24 24" width="14" height="14" style="color: #22c55e; flex-shrink: 0;"><path fill="none" d="M0 0h24v24H0z"/><path d="M10 15.172l9.192-9.193 1.415 1.414L10 18l-6.364-6.364 1.414-1.414z" fill="currentColor"/></svg>
+        <span>Delivery available to <strong>${location}</strong>. Estimated arrival in ${days} days.</span>
+      `;
+    } else {
+      statusDiv.style.display = 'flex';
+      statusDiv.style.color = '#ef4444'; // Red
+      statusDiv.innerHTML = `
+        <svg viewBox="0 0 24 24" width="14" height="14" style="color: #ef4444; flex-shrink: 0;"><path fill="none" d="M0 0h24v24H0z"/><path d="M12 22C6.477 22 2 17.523 2 12S6.477 2 12 2s10 4.477 10 10-4.477 10-10 10zm-1-7v2h2v-2h-2zm0-8v6h2V7h-2z" fill="currentColor"/></svg>
+        <span>Delivery unavailable to this pincode.</span>
+      `;
+    }
+  } catch (err) {
+    console.warn('Postal Pincode API failed, falling back to local database:', err.message);
+    const location = PINCODE_MAP_FALLBACK[pincode] || 'your location';
+    const days = (parseInt(pincode[5]) % 3) + 2; 
+    statusDiv.style.display = 'flex';
+    statusDiv.style.color = '#22c55e'; // Green
+    statusDiv.innerHTML = `
+      <svg viewBox="0 0 24 24" width="14" height="14" style="color: #22c55e; flex-shrink: 0;"><path fill="none" d="M0 0h24v24H0z"/><path d="M10 15.172l9.192-9.193 1.415 1.414L10 18l-6.364-6.364 1.414-1.414z" fill="currentColor"/></svg>
+      <span>Delivery available to <strong>${location}</strong>. Estimated arrival in ${days} days.</span>
+    `;
+  }
+}
+
+function renderRelatedProducts(currentProduct) {
+  const grid = document.getElementById('related-products-grid');
+  grid.innerHTML = '';
+
+  // Get products of the same category, excluding current product
+  const related = state.products
+    .filter(p => p.category === currentProduct.category && p.id !== currentProduct.id)
+    .slice(0, 4); // Display up to 4 related products
+
+  if (related.length === 0) {
+    grid.innerHTML = '<div class="cart-empty-message">No related products found in this category.</div>';
+    return;
+  }
+
+  related.forEach(product => {
+    const card = document.createElement('article');
+    card.className = 'product-card';
+    card.style.cursor = 'pointer';
+
+    let stockClass = 'in-stock';
+    let stockText = `${product.stock} in stock`;
+    if (product.stock === 0) {
+      stockClass = 'out-of-stock';
+      stockText = 'Out of Stock';
+    } else if (product.stock <= 5) {
+      stockClass = 'low-stock';
+      stockText = `Only ${product.stock} left!`;
+    }
+
+    card.innerHTML = `
+      <div class="product-image-container">
+        <img class="product-image" src="${product.imageUrl}" alt="${product.name}" loading="lazy">
+        <span class="product-category">${product.category}</span>
+      </div>
+      <div class="product-details">
+        <h3 class="product-title">${product.name}</h3>
+        <p class="product-desc">${product.description}</p>
+        <span class="stock-tag ${stockClass}">${stockText}</span>
+        <div class="product-footer">
+          <span class="product-price">₹${product.price.toFixed(2)}</span>
+          <button class="btn btn-primary add-to-cart-btn" data-id="${product.id}" ${product.stock === 0 ? 'disabled' : ''}>
+            ${product.stock === 0 ? 'Sold Out' : 'Add to Bag'}
+          </button>
+        </div>
+      </div>
+    `;
+
+    card.addEventListener('click', (e) => {
+      if (e.target.closest('.add-to-cart-btn')) {
+        return;
+      }
+      openProductDetails(product.id);
+    });
+
+    grid.appendChild(card);
   });
 }
 
@@ -401,7 +625,7 @@ function updateCartBadge() {
   badge.textContent = count;
 }
 
-async function handleAddToCart(productId) {
+async function handleAddToCart(productId, quantity = 1) {
   if (!state.token) {
     showToast('Please sign in to add items to your cart.', 'error');
     openAuthModal();
@@ -411,7 +635,7 @@ async function handleAddToCart(productId) {
   try {
     const response = await apiRequest('/api/cart', {
       method: 'POST',
-      body: JSON.stringify({ productId, quantity: 1 })
+      body: JSON.stringify({ productId, quantity })
     });
     
     state.cart = response.cart;
@@ -466,11 +690,22 @@ async function clearCart() {
 function renderCart() {
   const container = document.getElementById('cart-items-container');
   const totalPriceEl = document.getElementById('cart-total-price');
+  const deliveryChargeEl = document.getElementById('cart-delivery-charge');
+  const grandTotalEl = document.getElementById('cart-grand-total');
   const checkoutBtn = document.getElementById('checkout-btn');
   const clearBtn = document.getElementById('clear-cart-btn');
 
   container.innerHTML = '';
+
+  let deliveryCharge = 0;
+  if (state.cart.items.length > 0) {
+    deliveryCharge = state.cart.totalPrice >= 2000 ? 0 : 120;
+  }
+  const grandTotal = state.cart.totalPrice + deliveryCharge;
+
   totalPriceEl.textContent = `₹${state.cart.totalPrice.toFixed(2)}`;
+  deliveryChargeEl.textContent = deliveryCharge === 0 && state.cart.items.length > 0 ? 'FREE' : `₹${deliveryCharge.toFixed(2)}`;
+  grandTotalEl.textContent = `₹${grandTotal.toFixed(2)}`;
 
   if (state.cart.items.length === 0) {
     container.innerHTML = `
@@ -1138,6 +1373,7 @@ function switchSection(targetId) {
   const orderSec = document.getElementById('orders-section');
   const adminSec = document.getElementById('admin-section');
   const paymentSec = document.getElementById('payment-section');
+  const detailSec = document.getElementById('product-detail-section');
   const heroBanner = document.getElementById('hero-banner');
   const navShop = document.getElementById('nav-shop');
   const navOrders = document.getElementById('nav-orders');
@@ -1156,6 +1392,8 @@ function switchSection(targetId) {
   adminSec.classList.remove('active-section');
   paymentSec.classList.add('inactive-section');
   paymentSec.classList.remove('active-section');
+  detailSec.classList.add('inactive-section');
+  detailSec.classList.remove('active-section');
 
   if (targetId === 'shop-section') {
     shopSec.classList.add('active-section');
@@ -1177,6 +1415,10 @@ function switchSection(targetId) {
   } else if (targetId === 'payment-section') {
     paymentSec.classList.add('active-section');
     paymentSec.classList.remove('inactive-section');
+    heroBanner.classList.add('hidden');
+  } else if (targetId === 'product-detail-section') {
+    detailSec.classList.add('active-section');
+    detailSec.classList.remove('inactive-section');
     heroBanner.classList.add('hidden');
   }
 }
@@ -1266,14 +1508,126 @@ document.addEventListener('DOMContentLoaded', () => {
     e.preventDefault();
     switchSection('admin-section');
   });
+  document.getElementById('detail-back-btn').addEventListener('click', (e) => {
+    e.preventDefault();
+    switchSection('shop-section');
+  });
   document.getElementById('hero-cta-btn').addEventListener('click', () => {
     document.getElementById('shop-section').scrollIntoView({ behavior: 'smooth' });
+  });
+
+  // Product Detail Page Quantity and Add to Bag Controls
+  document.getElementById('detail-qty-minus').addEventListener('click', () => {
+    const qtyInput = document.getElementById('detail-quantity');
+    let currentQty = parseInt(qtyInput.value) || 1;
+    if (currentQty > 1) {
+      qtyInput.value = currentQty - 1;
+    }
+  });
+
+  document.getElementById('detail-qty-plus').addEventListener('click', () => {
+    const qtyInput = document.getElementById('detail-quantity');
+    let currentQty = parseInt(qtyInput.value) || 1;
+    const maxStock = state.currentProduct ? state.currentProduct.stock : 99;
+    if (currentQty < maxStock) {
+      qtyInput.value = currentQty + 1;
+    } else {
+      showToast(`Cannot select more than available stock (${maxStock})`, 'error');
+    }
+  });
+
+  document.getElementById('detail-add-btn').addEventListener('click', () => {
+    if (!state.currentProduct) return;
+    const qtyInput = document.getElementById('detail-quantity');
+    const qty = parseInt(qtyInput.value) || 1;
+    handleAddToCart(state.currentProduct.id, qty);
+  });
+
+  // Pincode Availability Checker Control
+  document.getElementById('detail-pincode-btn').addEventListener('click', () => {
+    const pincode = document.getElementById('detail-pincode-input').value.trim();
+    checkPincodeAvailability(pincode);
   });
 
   // Drawer / Overlay Toggles
   document.getElementById('cart-toggle-btn').addEventListener('click', openCartDrawer);
   document.getElementById('cart-close-btn').addEventListener('click', closeCartDrawer);
   document.getElementById('cart-overlay').addEventListener('click', closeCartDrawer);
+
+  // Delivery Location Modal Controls
+  const headerLocText = document.getElementById('header-location-text');
+  const modalAddrInput = document.getElementById('modal-address-input');
+  const modalPinInput = document.getElementById('modal-pincode-input');
+  
+  if (state.deliveryAddress || state.deliveryPincode) {
+    modalAddrInput.value = state.deliveryAddress;
+    modalPinInput.value = state.deliveryPincode;
+    
+    const addr = state.deliveryAddress;
+    const pin = state.deliveryPincode;
+    if (addr && pin) {
+      const shortAddr = addr.length > 12 ? addr.substring(0, 9) + '...' : addr;
+      headerLocText.textContent = `${pin} - ${shortAddr}`;
+    } else if (pin) {
+      headerLocText.textContent = pin;
+    } else if (addr) {
+      headerLocText.textContent = addr.length > 18 ? addr.substring(0, 15) + '...' : addr;
+    }
+  }
+
+  document.getElementById('header-location-selector').addEventListener('click', () => {
+    const modalAddrInput = document.getElementById('modal-address-input');
+    if (!state.token) {
+      modalAddrInput.disabled = true;
+      modalAddrInput.placeholder = "Please login to add a delivery address.";
+      modalAddrInput.value = "";
+    } else {
+      modalAddrInput.disabled = false;
+      modalAddrInput.placeholder = "Enter your shipping address (e.g. House No, Street, City)";
+    }
+    document.getElementById('location-modal').classList.add('active');
+  });
+
+  const closeLocationModal = () => {
+    document.getElementById('location-modal').classList.remove('active');
+  };
+  document.getElementById('location-close-btn').addEventListener('click', closeLocationModal);
+  document.getElementById('location-overlay').addEventListener('click', closeLocationModal);
+
+  document.getElementById('modal-location-save-btn').addEventListener('click', () => {
+    const addressVal = modalAddrInput.value.trim();
+    const pincodeVal = modalPinInput.value.trim();
+
+    if (pincodeVal && !/^\d{6}$/.test(pincodeVal)) {
+      showToast('Please enter a valid 6-digit Pincode.', 'error');
+      return;
+    }
+
+    if (!addressVal && !pincodeVal) {
+      state.deliveryAddress = '';
+      state.deliveryPincode = '';
+      localStorage.removeItem('aether_delivery_address');
+      localStorage.removeItem('aether_delivery_pincode');
+      headerLocText.textContent = 'Add Address';
+      showToast('Delivery location cleared.');
+    } else {
+      state.deliveryAddress = addressVal;
+      state.deliveryPincode = pincodeVal;
+      localStorage.setItem('aether_delivery_address', addressVal);
+      localStorage.setItem('aether_delivery_pincode', pincodeVal);
+      
+      if (addressVal && pincodeVal) {
+        const shortAddr = addressVal.length > 12 ? addressVal.substring(0, 9) + '...' : addressVal;
+        headerLocText.textContent = `${pincodeVal} - ${shortAddr}`;
+      } else if (pincodeVal) {
+        headerLocText.textContent = pincodeVal;
+      } else {
+        headerLocText.textContent = addressVal.length > 18 ? addressVal.substring(0, 15) + '...' : addressVal;
+      }
+      showToast('Delivery address saved!');
+    }
+    closeLocationModal();
+  });
   
   document.getElementById('auth-close-btn').addEventListener('click', closeAuthModal);
   document.getElementById('auth-overlay').addEventListener('click', closeAuthModal);
@@ -1323,7 +1677,18 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     
     // Set total price inside payment section summary
-    document.getElementById('gateway-total-price').textContent = '₹' + state.cart.totalPrice.toFixed(2);
+    const deliveryCharge = state.cart.totalPrice >= 2000 ? 0 : 120;
+    const grandTotal = state.cart.totalPrice + deliveryCharge;
+    document.getElementById('gateway-total-price').textContent = '₹' + grandTotal.toFixed(2);
+
+    // Auto-fill delivery address field in checkout
+    if (state.deliveryAddress || state.deliveryPincode) {
+      let fullAddress = state.deliveryAddress || '';
+      if (state.deliveryPincode) {
+        fullAddress += (fullAddress ? '\nPincode: ' : '') + state.deliveryPincode;
+      }
+      document.getElementById('shipping-address').value = fullAddress;
+    }
     
     // Reset payment selection to default GPay
     document.getElementById('payment-method').value = 'Google Pay';

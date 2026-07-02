@@ -178,15 +178,46 @@ async function initDb() {
     const productCount = parseInt(productCheck.rows[0].count, 10);
     
     if (productCount === 0) {
-      console.log('🌱 Seeding database with default products...');
-      for (const p of DEFAULT_PRODUCTS) {
-        await client.query(
-          `INSERT INTO products (id, name, description, price, category, stock, image_url) 
-           VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-          [p.id, p.name, p.description, p.price, p.category, p.stock, p.imageUrl]
-        );
+      try {
+        console.log('🌱 Attempting to fetch products from Fake Store API...');
+        const response = await fetch('https://fakestoreapi.com/products');
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        const fakeProducts = await response.json();
+        
+        console.log(`🌱 Seeding database with ${fakeProducts.length} products from Fake Store API...`);
+        for (const p of fakeProducts) {
+          const id = `prod-${p.id}`;
+          const name = p.title.substring(0, 255);
+          const description = p.description;
+          const price = (parseFloat(p.price) || 0.0) * 95.0;
+          const category = p.category
+            .split(' ')
+            .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+            .join(' ');
+          const stock = Math.floor(Math.random() * 81) + 20; // 20 to 100 stock
+          const imageUrl = p.image;
+
+          await client.query(
+            `INSERT INTO products (id, name, description, price, category, stock, image_url) 
+             VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+            [id, name, description, price, category, stock, imageUrl]
+          );
+        }
+        console.log('✅ Fake Store API products seeded.');
+      } catch (fetchErr) {
+        console.warn('⚠️ Failed to fetch from Fake Store API. Falling back to default products:', fetchErr.message);
+        console.log('🌱 Seeding database with default products...');
+        for (const p of DEFAULT_PRODUCTS) {
+          await client.query(
+            `INSERT INTO products (id, name, description, price, category, stock, image_url) 
+             VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+            [p.id, p.name, p.description, p.price * 95.0, p.category, p.stock, p.imageUrl]
+          );
+        }
+        console.log('✅ Default products seeded.');
       }
-      console.log('✅ Default products seeded.');
     } else {
       console.log('ℹ️ Products table already seeded.');
     }
