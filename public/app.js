@@ -1038,6 +1038,7 @@ function toggleAdminTab(tabName) {
   if (tabName === 'products') {
     prodTab.classList.add('active');
     prodView.classList.add('active-view');
+    document.getElementById('admin-products-search').value = '';
     loadAdminProducts();
   } else if (tabName === 'orders') {
     orderTab.classList.add('active');
@@ -1155,7 +1156,37 @@ async function loadAdminProducts() {
   listContainer.innerHTML = '<div class="cart-empty-message">Loading products...</div>';
   
   try {
-    const products = await apiRequest('/api/products');
+    let products = await apiRequest('/api/products');
+    
+    const query = document.getElementById('admin-products-search').value.toLowerCase().trim();
+    if (query) {
+      products = products.filter(p => 
+        p.name.toLowerCase().includes(query) || 
+        p.category.toLowerCase().includes(query) ||
+        (p.description && p.description.toLowerCase().includes(query))
+      );
+    }
+
+    // Sort products
+    const sortBy = document.getElementById('admin-products-sort').value;
+    if (sortBy === 'name-asc') {
+      products.sort((a, b) => a.name.localeCompare(b.name));
+    } else if (sortBy === 'name-desc') {
+      products.sort((a, b) => b.name.localeCompare(a.name));
+    } else if (sortBy === 'price-asc') {
+      products.sort((a, b) => a.price - b.price);
+    } else if (sortBy === 'price-desc') {
+      products.sort((a, b) => b.price - a.price);
+    } else if (sortBy === 'stock-asc') {
+      products.sort((a, b) => a.stock - b.stock);
+    } else if (sortBy === 'stock-desc') {
+      products.sort((a, b) => b.stock - a.stock);
+    }
+
+    if (products.length === 0) {
+      listContainer.innerHTML = '<div class="cart-empty-message">No matching products found.</div>';
+      return;
+    }
     
     let html = `
       <table class="admin-table">
@@ -1802,6 +1833,8 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('admin-product-close-btn').addEventListener('click', closeAdminProductModal);
   document.getElementById('admin-product-overlay').addEventListener('click', closeAdminProductModal);
   document.getElementById('admin-product-form').addEventListener('submit', handleProductSubmit);
+  document.getElementById('admin-products-search').addEventListener('input', loadAdminProducts);
+  document.getElementById('admin-products-sort').addEventListener('change', loadAdminProducts);
   document.getElementById('run-scraper-btn').addEventListener('click', runScraper);
   document.getElementById('run-custom-scraper-btn').addEventListener('click', runCustomScraper);
 });
