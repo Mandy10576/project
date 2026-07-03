@@ -36,7 +36,9 @@ async function apiRequest(endpoint, options = {}) {
   const data = await response.json();
 
   if (!response.ok) {
-    throw new Error(data.message || 'Something went wrong');
+    const error = new Error(data.message || 'Something went wrong');
+    error.data = data;
+    throw error;
   }
 
   return data;
@@ -1091,6 +1093,12 @@ async function runScraper() {
       writeLog(`\n[Error] Importer failed: ${res.message}`);
     }
   } catch (err) {
+    if (err.data && Array.isArray(err.data.logs)) {
+      for (const log of err.data.logs) {
+        writeLog(log);
+        await new Promise(resolve => setTimeout(resolve, 80));
+      }
+    }
     writeLog(`\n[Critical Error] Connection failed: ${err.message}`);
   } finally {
     runBtn.disabled = false;
@@ -1143,6 +1151,12 @@ async function runCustomScraper() {
       writeLog(`\n[Error] Scraper failed: ${res.message}`);
     }
   } catch (err) {
+    if (err.data && Array.isArray(err.data.logs)) {
+      for (const log of err.data.logs) {
+        writeLog(log);
+        await new Promise(resolve => setTimeout(resolve, 80));
+      }
+    }
     writeLog(`\n[Critical Error] Connection failed: ${err.message}`);
   } finally {
     runBtn.disabled = false;
