@@ -1466,6 +1466,8 @@ function switchSection(targetId) {
     detailSec.classList.remove('inactive-section');
     heroBanner.classList.add('hidden');
   }
+
+  window.scrollTo(0, 0);
 }
 
 // ==========================================================================
@@ -1531,6 +1533,12 @@ function toggleAuthTab(tab) {
 // APPLICATION INITIALIZATION & EVENT LISTENERS
 // ==========================================================================
 document.addEventListener('DOMContentLoaded', () => {
+  // Disable browser automatic scroll restoration and scroll to top on refresh
+  if ('scrollRestoration' in history) {
+    history.scrollRestoration = 'manual';
+  }
+  window.scrollTo(0, 0);
+
   // Check auth and sync cart on load
   initAuth();
   initGoogleSignIn();
