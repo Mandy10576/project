@@ -77,8 +77,7 @@ const DEFAULT_PRODUCTS = [
 // Initialize database tables & seed products
 async function initDb() {
   if (!connectionString) {
-    console.error('❌ Cannot initialize database: DATABASE_URL is missing.');
-    return;
+    throw new Error('DATABASE_URL environment variable is missing. Please define it in your environment configurations (e.g. .env file or Render Environment variables).');
   }
 
   const client = await pool.connect();
