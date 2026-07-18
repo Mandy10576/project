@@ -279,7 +279,7 @@ function renderProducts() {
         <p class="product-desc">${product.description}</p>
         <span class="stock-tag ${stockClass}">${stockText}</span>
         <div class="product-footer">
-          <span class="product-price">$${product.price.toFixed(2)}</span>
+          <span class="product-price">₹${product.price.toFixed(2)}</span>
           <button class="btn btn-primary add-to-cart-btn" data-id="${product.id}" ${product.stock === 0 ? 'disabled' : ''}>
             ${product.stock === 0 ? 'Sold Out' : 'Add to Bag'}
           </button>
@@ -387,7 +387,7 @@ function renderCart() {
   const clearBtn = document.getElementById('clear-cart-btn');
 
   container.innerHTML = '';
-  totalPriceEl.textContent = `$${state.cart.totalPrice.toFixed(2)}`;
+  totalPriceEl.textContent = `₹${state.cart.totalPrice.toFixed(2)}`;
 
   if (state.cart.items.length === 0) {
     container.innerHTML = `
@@ -411,7 +411,7 @@ function renderCart() {
       <img class="cart-item-image" src="${item.product.imageUrl}" alt="${item.product.name}">
       <div class="cart-item-info">
         <h4>${item.product.name}</h4>
-        <div class="cart-item-price">$${item.product.price.toFixed(2)}</div>
+        <div class="cart-item-price">₹${item.product.price.toFixed(2)}</div>
         <div class="quantity-selector">
           <button class="qty-btn dec-qty-btn" data-id="${item.product.id}" data-qty="${item.quantity}">-</button>
           <span class="qty-val">${item.quantity}</span>
@@ -674,7 +674,7 @@ function renderOrders(orders) {
     const itemsHTML = order.items.map(item => `
       <div class="order-item-row">
         <span class="order-item-name">${item.name} <span style="color: var(--text-muted);">x ${item.quantity}</span></span>
-        <span>$${item.itemTotal.toFixed(2)}</span>
+        <span>₹${item.itemTotal.toFixed(2)}</span>
       </div>
     `).join('');
 
@@ -691,7 +691,7 @@ function renderOrders(orders) {
       </div>
       <div class="order-footer">
         <div class="order-address"><strong>Shipping:</strong> ${order.shippingAddress} | <strong>Payment:</strong> ${order.paymentMethod}</div>
-        <div class="order-price">Total Paid: <span>$${order.totalPrice.toFixed(2)}</span></div>
+        <div class="order-price">Total Paid: <span>₹${order.totalPrice.toFixed(2)}</span></div>
       </div>
     `;
     container.appendChild(card);
@@ -860,7 +860,7 @@ async function loadAdminProducts() {
           <td><img src="${p.imageUrl || 'https://via.placeholder.com/40'}" class="product-thumb" alt="${p.name}"></td>
           <td><strong>${p.name}</strong></td>
           <td>${p.category}</td>
-          <td>$${p.price.toFixed(2)}</td>
+          <td>₹${p.price.toFixed(2)}</td>
           <td>${p.stock}</td>
           <td class="admin-actions">
             <button class="btn btn-warning btn-xs edit-product-btn" data-id="${p.id}">Edit</button>
@@ -932,7 +932,7 @@ async function loadAdminOrders() {
             <span style="font-size: 0.8rem; color: var(--text-gray);">${o.userEmail}</span>
           </td>
           <td>${date}</td>
-          <td>$${o.totalPrice.toFixed(2)}</td>
+          <td>₹${o.totalPrice.toFixed(2)}</td>
           <td>${o.paymentMethod}</td>
           <td>
             <select class="admin-status-select order-status-select" data-id="${o.id}">
@@ -1223,7 +1223,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     
     // Set total price inside payment section summary
-    document.getElementById('gateway-total-price').textContent = '$' + state.cart.totalPrice.toFixed(2);
+    document.getElementById('gateway-total-price').textContent = '₹' + state.cart.totalPrice.toFixed(2);
     
     // Reset payment selection to default GPay
     document.getElementById('payment-method').value = 'Google Pay';

@@ -22,15 +22,13 @@ if (hasCredentials()) {
 
 // Create order
 router.post('/create-order', async (req, res) => {
-  const { amount } = req.body; // Amount in USD
+  const { amount } = req.body; // Amount in INR
 
   if (!amount || isNaN(amount)) {
     return res.status(400).json({ success: false, message: 'Invalid order amount' });
   }
 
-  // standard exchange rate 1 USD = 83 INR
-  const usdToInrRate = 83;
-  const amountInPaise = Math.round(amount * usdToInrRate * 100);
+  const amountInPaise = Math.round(amount * 100);
 
   if (!hasCredentials()) {
     // Return mock order if credentials are not configured

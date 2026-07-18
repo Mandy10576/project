@@ -230,9 +230,9 @@ router.post('/scrape', authMiddleware, adminAuth, async (req, res) => {
         if (!isNaN(parsed)) price = parsed;
       }
 
-      // Smart currency handling: If price is in INR (Rupees), convert to USD
-      if (price > 250) {
-        price = Math.round((price / 83.0) * 100) / 100;
+      // Smart currency handling: If price is in USD (less than 250), convert to INR. Otherwise keep INR.
+      if (price < 250) {
+        price = Math.round((price * 83.0) * 100) / 100;
       }
 
       const id = `scrape-custom-${Date.now()}`;
@@ -342,7 +342,7 @@ router.post('/scrape', authMiddleware, adminAuth, async (req, res) => {
         id = `scrape-dj-${item.id}`;
         name = item.title;
         description = item.description || 'No description provided.';
-        price = parseFloat(item.price) || 29.99;
+        price = Math.round((parseFloat(item.price) || 29.99) * 83.0 * 100) / 100;
         
         // Map category nice labels
         if (item.category === 'smartphones' || item.category === 'laptops') {
@@ -361,7 +361,7 @@ router.post('/scrape', authMiddleware, adminAuth, async (req, res) => {
         id = `scrape-fs-${item.id}`;
         name = item.title;
         description = item.description || 'No description provided.';
-        price = parseFloat(item.price) || 29.99;
+        price = Math.round((parseFloat(item.price) || 29.99) * 83.0 * 100) / 100;
         
         // Map category nice labels
         if (item.category === 'electronics') {
