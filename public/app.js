@@ -460,14 +460,49 @@ function renderCart() {
 async function submitOrder(e) {
   e.preventDefault();
   const address = document.getElementById('shipping-address').value.trim();
-  const payment = document.getElementById('payment-method').value;
 
   if (!address) {
     showToast('Shipping address is required', 'error');
     return;
   }
 
+  // 1. Temporarily store details in state
+  state.tempShippingAddress = address;
+
+  // 2. Update Payment Gateway Modal summary info
+  document.getElementById('gateway-shipping-address').textContent = address;
+  document.getElementById('gateway-total-price').textContent = '$' + state.cart.totalPrice.toFixed(2);
+
+  // 3. Reset payment selection to default GPay
+  document.getElementById('payment-method').value = 'Google Pay';
+  document.querySelectorAll('.payment-option-card').forEach(card => {
+    if (card.getAttribute('data-value') === 'Google Pay') {
+      card.classList.add('active');
+    } else {
+      card.classList.remove('active');
+    }
+  });
+
+  // 4. Open Payment Gateway Modal
+  document.getElementById('payment-gateway-modal').classList.add('active');
+}
+
+async function confirmGatewayPayment() {
+  const confirmBtn = document.getElementById('confirm-payment-btn');
+  const originalText = confirmBtn.textContent;
+  const address = state.tempShippingAddress;
+  const payment = document.getElementById('payment-method').value;
+
+  if (!address) {
+    showToast('Shipping address error. Please re-submit.', 'error');
+    closePaymentGatewayModal();
+    return;
+  }
+
   try {
+    confirmBtn.disabled = true;
+    confirmBtn.textContent = 'Authorizing payment...';
+
     const response = await apiRequest('/api/orders', {
       method: 'POST',
       body: JSON.stringify({ shippingAddress: address, paymentMethod: payment })
@@ -477,8 +512,9 @@ async function submitOrder(e) {
     state.cart = { items: [], totalPrice: 0 };
     updateCartBadge();
     
-    // Reset forms & close drawers
+    // Reset forms & close drawers/modals
     document.getElementById('checkout-form').reset();
+    closePaymentGatewayModal();
     closeCartDrawer();
     
     // Switch to order history page
@@ -487,7 +523,15 @@ async function submitOrder(e) {
     fetchProducts(); // Refresh catalog products to update stocks
   } catch (error) {
     showToast(error.message, 'error');
+  } finally {
+    confirmBtn.disabled = false;
+    confirmBtn.textContent = originalText;
   }
+}
+
+function closePaymentGatewayModal() {
+  document.getElementById('payment-gateway-modal').classList.remove('active');
+  state.tempShippingAddress = null;
 }
 
 async function fetchOrders() {
@@ -989,6 +1033,11 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   document.getElementById('checkout-form').addEventListener('submit', submitOrder);
+
+  // Payment Gateway Modal Event Listeners
+  document.getElementById('payment-gateway-close-btn').addEventListener('click', closePaymentGatewayModal);
+  document.getElementById('payment-gateway-overlay').addEventListener('click', closePaymentGatewayModal);
+  document.getElementById('confirm-payment-btn').addEventListener('click', confirmGatewayPayment);
 
   // Admin Event Listeners
   document.getElementById('admin-tab-products').addEventListener('click', () => toggleAdminTab('products'));
