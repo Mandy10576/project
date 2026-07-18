@@ -61,7 +61,7 @@ const DEFAULT_PRODUCTS = [
     price: 39.99,
     category: "Accessories",
     stock: 150,
-    imageUrl: "https://images.unsplash.com/photo-1627124718185-6ae6f316866a?w=500&auto=format&fit=crop&q=60"
+    imageUrl: "https://images.unsplash.com/photo-1601597111158-2fceff292cdc?w=500&auto=format&fit=crop&q=60"
   },
   {
     id: "prod-6",
@@ -176,6 +176,13 @@ async function initDb() {
     } else {
       console.log('ℹ️ Products table already seeded.');
     }
+
+    // Correct the wallet image if it's using the deleted Unsplash URL
+    await client.query(`
+      UPDATE products 
+      SET image_url = 'https://images.unsplash.com/photo-1601597111158-2fceff292cdc?w=500&auto=format&fit=crop&q=60'
+      WHERE id = 'prod-5' AND (image_url IS NULL OR image_url LIKE '%photo-1627124718185%')
+    `);
 
   } catch (err) {
     console.error('❌ Error during database initialization:', err);
