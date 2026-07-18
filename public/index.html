@@ -144,10 +144,12 @@
             <span style="color: var(--text-gray);">Amount to Pay:</span>
             <strong id="gateway-total-price" style="color: var(--accent-cyan); font-size: 1.35rem; font-family: var(--font-heading);">$0.00</strong>
           </div>
-          <div style="border-top: 1px solid var(--border-glass); padding-top: 12px; display: flex; flex-direction: column; gap: 6px;">
-            <span style="color: var(--text-gray); font-size: 0.85rem; font-weight: 500;">Shipping Destination:</span>
-            <span id="gateway-shipping-address" style="color: var(--text-white); font-size: 0.9rem; line-height: 1.4; word-break: break-word;">...</span>
-          </div>
+        </div>
+
+        <!-- Shipping Address input field -->
+        <div class="form-group" style="margin-bottom: 25px;">
+          <label for="shipping-address" style="display: block; margin-bottom: 8px; font-size: 0.85rem; color: var(--text-gray); font-weight: 500;">Shipping Address</label>
+          <textarea id="shipping-address" rows="3" placeholder="123 Main St, Apt 4B, City, Country" style="width: 100%; box-sizing: border-box; background: rgba(255, 255, 255, 0.05); border: 1px solid var(--border-glass); border-radius: 12px; color: var(--text-white); padding: 12px 14px; outline: none; font-size: 0.9rem; resize: vertical; transition: var(--transition-smooth);" required></textarea>
         </div>
 
         <h4 style="margin-bottom: 15px; font-family: var(--font-heading); font-size: 1.05rem; color: var(--text-white);">Select Payment Method</h4>
@@ -198,17 +200,7 @@
           <span id="cart-total-price">$0.00</span>
         </div>
         
-        <div id="checkout-form-container" class="hidden">
-          <hr class="divider">
-          <h4>Checkout Details</h4>
-          <form id="checkout-form" class="checkout-form">
-            <div class="form-group">
-              <label for="shipping-address">Shipping Address</label>
-              <textarea id="shipping-address" rows="2" placeholder="123 Main St, Apt 4B, City, Country" required></textarea>
-            </div>
-            <button type="submit" id="submit-order-btn" class="btn btn-primary btn-block">Proceed to Payment</button>
-          </form>
-        </div>
+
 
         <button id="checkout-btn" class="btn btn-primary btn-block">Proceed to Checkout</button>
         <button id="clear-cart-btn" class="btn btn-secondary btn-block">Clear Bag</button>
@@ -337,6 +329,7 @@
   </footer>
 
   <!-- Scripts -->
+  <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

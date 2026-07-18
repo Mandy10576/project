@@ -385,7 +385,6 @@ function renderCart() {
   const totalPriceEl = document.getElementById('cart-total-price');
   const checkoutBtn = document.getElementById('checkout-btn');
   const clearBtn = document.getElementById('clear-cart-btn');
-  const checkoutFormContainer = document.getElementById('checkout-form-container');
 
   container.innerHTML = '';
   totalPriceEl.textContent = `$${state.cart.totalPrice.toFixed(2)}`;
@@ -399,7 +398,6 @@ function renderCart() {
     `;
     checkoutBtn.classList.add('hidden');
     clearBtn.classList.add('hidden');
-    checkoutFormContainer.classList.add('hidden');
     return;
   }
 
@@ -457,80 +455,180 @@ function renderCart() {
 // ==========================================================================
 // ORDERS LOGIC
 // ==========================================================================
-async function submitOrder(e) {
-  e.preventDefault();
-  const address = document.getElementById('shipping-address').value.trim();
-
-  if (!address) {
-    showToast('Shipping address is required', 'error');
-    return;
-  }
-
-  // 1. Temporarily store details in state
-  state.tempShippingAddress = address;
-
-  // 2. Update Payment Section summary info
-  document.getElementById('gateway-shipping-address').textContent = address;
-  document.getElementById('gateway-total-price').textContent = '$' + state.cart.totalPrice.toFixed(2);
-
-  // 3. Reset payment selection to default GPay
-  document.getElementById('payment-method').value = 'Google Pay';
-  document.querySelectorAll('.payment-option-card').forEach(card => {
-    if (card.getAttribute('data-value') === 'Google Pay') {
-      card.classList.add('active');
-    } else {
-      card.classList.remove('active');
-    }
-  });
-
-  // 4. Close cart drawer and switch to payment page section
-  closeCartDrawer();
-  switchSection('payment-section');
-}
-
 async function confirmGatewayPayment() {
   const confirmBtn = document.getElementById('confirm-payment-btn');
   const originalText = confirmBtn.textContent;
-  const address = state.tempShippingAddress;
+  const address = document.getElementById('shipping-address').value.trim();
   const payment = document.getElementById('payment-method').value;
 
   if (!address) {
-    showToast('Shipping address error. Please re-submit.', 'error');
-    cancelPaymentFlow();
+    showToast('Shipping address is required to place your order.', 'error');
     return;
   }
 
+  // If Cash on Delivery is selected, bypass Razorpay completely
+  if (payment === 'Cash on Delivery') {
+    try {
+      confirmBtn.disabled = true;
+      confirmBtn.textContent = 'Registering COD order...';
+
+      const response = await apiRequest('/api/orders', {
+        method: 'POST',
+        body: JSON.stringify({ shippingAddress: address, paymentMethod: payment })
+      });
+
+      showToast(response.message || 'COD Order placed successfully!');
+      state.cart = { items: [], totalPrice: 0 };
+      updateCartBadge();
+      
+      document.getElementById('shipping-address').value = '';
+      switchSection('orders-section');
+      fetchOrders();
+      fetchProducts();
+    } catch (error) {
+      showToast(error.message, 'error');
+    } finally {
+      confirmBtn.disabled = false;
+      confirmBtn.textContent = originalText;
+    }
+    return;
+  }
+
+  // For GPay, Paytm, and Debit Card, use Razorpay checkout
+  let openedGateway = false;
   try {
     confirmBtn.disabled = true;
-    confirmBtn.textContent = 'Authorizing payment...';
+    confirmBtn.textContent = 'Connecting secure gateway...';
 
-    const response = await apiRequest('/api/orders', {
+    const orderRes = await apiRequest('/api/payment/create-order', {
       method: 'POST',
-      body: JSON.stringify({ shippingAddress: address, paymentMethod: payment })
+      body: JSON.stringify({ amount: state.cart.totalPrice })
     });
 
-    showToast(response.message || 'Order placed successfully!');
-    state.cart = { items: [], totalPrice: 0 };
-    updateCartBadge();
-    
-    // Reset forms & clear temp state
-    document.getElementById('checkout-form').reset();
-    state.tempShippingAddress = null;
-    
-    // Switch to order history page
-    switchSection('orders-section');
-    fetchOrders();
-    fetchProducts(); // Refresh catalog products to update stocks
+    if (!orderRes.success) {
+      throw new Error(orderRes.message || 'Failed to create gateway order.');
+    }
+
+    if (orderRes.mockMode) {
+      // Mock Mode: credentials missing in .env, simulate payment gateway prompt
+      const approval = confirm(
+        `🛡️ Razorpay Sandbox (Mock Mode):\n\n` +
+        `Simulate payment of ₹${(orderRes.amount / 100).toFixed(2)} via ${payment}?\n\n` +
+        `Click [OK] to authorize payment or [Cancel] to decline.`
+      );
+
+      if (approval) {
+        confirmBtn.textContent = 'Authorizing mock transaction...';
+        
+        // Call verification with mock flag
+        const verifyRes = await apiRequest('/api/payment/verify-signature', {
+          method: 'POST',
+          body: JSON.stringify({ mockMode: true })
+        });
+
+        if (verifyRes.success) {
+          confirmBtn.textContent = 'Registering order...';
+          const orderResponse = await apiRequest('/api/orders', {
+            method: 'POST',
+            body: JSON.stringify({
+              shippingAddress: address,
+              paymentMethod: payment,
+              paymentVerified: true
+            })
+          });
+
+          showToast('Payment successful! Order has been placed.');
+          state.cart = { items: [], totalPrice: 0 };
+          updateCartBadge();
+          document.getElementById('shipping-address').value = '';
+          switchSection('orders-section');
+          fetchOrders();
+          fetchProducts();
+        }
+      } else {
+        showToast('Payment authorization cancelled by user.', 'warning');
+      }
+    } else {
+      // Real Mode: credentials configured in .env, open checkout modal
+      openedGateway = true;
+      const options = {
+        key: orderRes.keyId,
+        amount: orderRes.amount,
+        currency: orderRes.currency,
+        name: "AETHER Inc.",
+        description: `Order Checkout Payment (${payment})`,
+        order_id: orderRes.orderId,
+        handler: async function (response) {
+          try {
+            confirmBtn.disabled = true;
+            confirmBtn.textContent = 'Verifying signature...';
+
+            const verifyRes = await apiRequest('/api/payment/verify-signature', {
+              method: 'POST',
+              body: JSON.stringify({
+                razorpay_order_id: response.razorpay_order_id,
+                razorpay_payment_id: response.razorpay_payment_id,
+                razorpay_signature: response.razorpay_signature
+              })
+            });
+
+            if (verifyRes.success) {
+              confirmBtn.textContent = 'Finalizing order...';
+              const orderResponse = await apiRequest('/api/orders', {
+                method: 'POST',
+                body: JSON.stringify({
+                  shippingAddress: address,
+                  paymentMethod: payment,
+                  razorpayPaymentId: response.razorpay_payment_id
+                })
+              });
+
+              showToast(orderResponse.message || 'Payment successful! Order placed.');
+              state.cart = { items: [], totalPrice: 0 };
+              updateCartBadge();
+              document.getElementById('shipping-address').value = '';
+              switchSection('orders-section');
+              fetchOrders();
+              fetchProducts();
+            }
+          } catch (err) {
+            showToast(err.message, 'error');
+          } finally {
+            confirmBtn.disabled = false;
+            confirmBtn.textContent = originalText;
+          }
+        },
+        prefill: {
+          name: state.user ? state.user.name : "",
+          email: state.user ? state.user.email : ""
+        },
+        theme: {
+          color: "#00f2fe"
+        },
+        modal: {
+          ondismiss: function () {
+            showToast('Secure payment window closed.', 'warning');
+            confirmBtn.disabled = false;
+            confirmBtn.textContent = originalText;
+          }
+        }
+      };
+
+      const rzp = new Razorpay(options);
+      rzp.open();
+    }
   } catch (error) {
     showToast(error.message, 'error');
   } finally {
-    confirmBtn.disabled = false;
-    confirmBtn.textContent = originalText;
+    if (!openedGateway) {
+      confirmBtn.disabled = false;
+      confirmBtn.textContent = originalText;
+    }
   }
 }
 
 function cancelPaymentFlow() {
-  state.tempShippingAddress = null;
+  document.getElementById('shipping-address').value = '';
   switchSection('shop-section');
 }
 
@@ -1003,10 +1101,32 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('clear-cart-btn').addEventListener('click', clearCart);
   
   const checkoutBtn = document.getElementById('checkout-btn');
-  const checkoutFormContainer = document.getElementById('checkout-form-container');
   checkoutBtn.addEventListener('click', () => {
-    checkoutBtn.classList.add('hidden');
-    checkoutFormContainer.classList.remove('hidden');
+    if (!state.token) {
+      openAuthModal();
+      showToast('Please login/signup to complete checkout.', 'error');
+      return;
+    }
+    if (state.cart.items.length === 0) {
+      showToast('Your shopping bag is empty.', 'error');
+      return;
+    }
+    
+    // Set total price inside payment section summary
+    document.getElementById('gateway-total-price').textContent = '$' + state.cart.totalPrice.toFixed(2);
+    
+    // Reset payment selection to default GPay
+    document.getElementById('payment-method').value = 'Google Pay';
+    document.querySelectorAll('.payment-option-card').forEach(card => {
+      if (card.getAttribute('data-value') === 'Google Pay') {
+        card.classList.add('active');
+      } else {
+        card.classList.remove('active');
+      }
+    });
+
+    closeCartDrawer();
+    switchSection('payment-section');
   });
 
   // Payment option card toggles
@@ -1035,7 +1155,7 @@ document.addEventListener('DOMContentLoaded', () => {
     signup(name, email, password);
   });
 
-  document.getElementById('checkout-form').addEventListener('submit', submitOrder);
+
 
   // Payment Section Event Listeners
   document.getElementById('payment-back-btn').addEventListener('click', cancelPaymentFlow);
