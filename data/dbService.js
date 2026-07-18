@@ -150,6 +150,15 @@ async function initDb() {
       )
     `);
 
+    // 6. Email OTPs Table
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS email_otps (
+        email VARCHAR(100) PRIMARY KEY,
+        otp VARCHAR(6) NOT NULL,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
     console.log('✅ Tables checked/created successfully.');
 
     // Increase name column capacity to VARCHAR(255) for long custom products

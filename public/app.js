@@ -133,11 +133,11 @@ async function login(email, password) {
   }
 }
 
-async function signup(name, email, password) {
+async function signup(name, email, password, otp) {
   try {
     const data = await apiRequest('/api/auth/signup', {
       method: 'POST',
-      body: JSON.stringify({ name, email, password })
+      body: JSON.stringify({ name, email, password, otp })
     });
 
     state.token = data.token;
@@ -152,6 +152,31 @@ async function signup(name, email, password) {
     fetchProducts();
   } catch (error) {
     showToast(error.message, 'error');
+  }
+}
+
+async function sendOtp(email) {
+  const sendBtn = document.getElementById('signup-send-otp-btn');
+  sendBtn.disabled = true;
+  sendBtn.textContent = 'Sending OTP...';
+
+  try {
+    const res = await apiRequest('/api/auth/send-otp', {
+      method: 'POST',
+      body: JSON.stringify({ email })
+    });
+
+    showToast(res.message || 'OTP verification code sent successfully!');
+    
+    // Unhide verification input field & submit button
+    document.getElementById('signup-otp-group').classList.remove('hidden');
+    document.getElementById('signup-submit-btn').classList.remove('hidden');
+    sendBtn.classList.add('hidden');
+  } catch (error) {
+    showToast(error.message, 'error');
+  } finally {
+    sendBtn.disabled = false;
+    sendBtn.textContent = 'Send Verification OTP';
   }
 }
 
@@ -1118,6 +1143,11 @@ function closeAuthModal() {
   document.getElementById('auth-modal').classList.remove('active');
   document.getElementById('login-form').reset();
   document.getElementById('signup-form').reset();
+  
+  // Reset OTP registration fields
+  document.getElementById('signup-otp-group').classList.add('hidden');
+  document.getElementById('signup-submit-btn').classList.add('hidden');
+  document.getElementById('signup-send-otp-btn').classList.remove('hidden');
 }
 
 // Toggle Auth Tabs (Login vs Sign Up)
@@ -1262,7 +1292,24 @@ document.addEventListener('DOMContentLoaded', () => {
     const name = document.getElementById('signup-name').value.trim();
     const email = document.getElementById('signup-email').value.trim();
     const password = document.getElementById('signup-password').value;
-    signup(name, email, password);
+    const otp = document.getElementById('signup-otp').value.trim();
+    signup(name, email, password, otp);
+  });
+
+  document.getElementById('signup-send-otp-btn').addEventListener('click', () => {
+    const name = document.getElementById('signup-name').value.trim();
+    const email = document.getElementById('signup-email').value.trim();
+    const password = document.getElementById('signup-password').value;
+
+    if (!name || !email || !password) {
+      showToast('Please fill out Full Name, Email, and Password first.', 'error');
+      return;
+    }
+    if (password.length < 6) {
+      showToast('Password must be at least 6 characters.', 'error');
+      return;
+    }
+    sendOtp(email);
   });
 
 
