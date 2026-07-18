@@ -469,7 +469,7 @@ async function submitOrder(e) {
   // 1. Temporarily store details in state
   state.tempShippingAddress = address;
 
-  // 2. Update Payment Gateway Modal summary info
+  // 2. Update Payment Section summary info
   document.getElementById('gateway-shipping-address').textContent = address;
   document.getElementById('gateway-total-price').textContent = '$' + state.cart.totalPrice.toFixed(2);
 
@@ -483,8 +483,9 @@ async function submitOrder(e) {
     }
   });
 
-  // 4. Open Payment Gateway Modal
-  document.getElementById('payment-gateway-modal').classList.add('active');
+  // 4. Close cart drawer and switch to payment page section
+  closeCartDrawer();
+  switchSection('payment-section');
 }
 
 async function confirmGatewayPayment() {
@@ -495,7 +496,7 @@ async function confirmGatewayPayment() {
 
   if (!address) {
     showToast('Shipping address error. Please re-submit.', 'error');
-    closePaymentGatewayModal();
+    cancelPaymentFlow();
     return;
   }
 
@@ -512,10 +513,9 @@ async function confirmGatewayPayment() {
     state.cart = { items: [], totalPrice: 0 };
     updateCartBadge();
     
-    // Reset forms & close drawers/modals
+    // Reset forms & clear temp state
     document.getElementById('checkout-form').reset();
-    closePaymentGatewayModal();
-    closeCartDrawer();
+    state.tempShippingAddress = null;
     
     // Switch to order history page
     switchSection('orders-section');
@@ -529,9 +529,9 @@ async function confirmGatewayPayment() {
   }
 }
 
-function closePaymentGatewayModal() {
-  document.getElementById('payment-gateway-modal').classList.remove('active');
+function cancelPaymentFlow() {
   state.tempShippingAddress = null;
+  switchSection('shop-section');
 }
 
 async function fetchOrders() {
@@ -846,6 +846,7 @@ function switchSection(targetId) {
   const shopSec = document.getElementById('shop-section');
   const orderSec = document.getElementById('orders-section');
   const adminSec = document.getElementById('admin-section');
+  const paymentSec = document.getElementById('payment-section');
   const heroBanner = document.getElementById('hero-banner');
   const navShop = document.getElementById('nav-shop');
   const navOrders = document.getElementById('nav-orders');
@@ -855,35 +856,37 @@ function switchSection(targetId) {
   navOrders.classList.remove('active');
   navAdmin.classList.remove('active');
 
+  // Hide all sections first
+  shopSec.classList.add('inactive-section');
+  shopSec.classList.remove('active-section');
+  orderSec.classList.add('inactive-section');
+  orderSec.classList.remove('active-section');
+  adminSec.classList.add('inactive-section');
+  adminSec.classList.remove('active-section');
+  paymentSec.classList.add('inactive-section');
+  paymentSec.classList.remove('active-section');
+
   if (targetId === 'shop-section') {
     shopSec.classList.add('active-section');
     shopSec.classList.remove('inactive-section');
-    orderSec.classList.add('inactive-section');
-    orderSec.classList.remove('active-section');
-    adminSec.classList.add('inactive-section');
-    adminSec.classList.remove('active-section');
     heroBanner.classList.remove('hidden');
     navShop.classList.add('active');
   } else if (targetId === 'orders-section') {
     orderSec.classList.add('active-section');
     orderSec.classList.remove('inactive-section');
-    shopSec.classList.add('inactive-section');
-    shopSec.classList.remove('active-section');
-    adminSec.classList.add('inactive-section');
-    adminSec.classList.remove('active-section');
     heroBanner.classList.add('hidden');
     navOrders.classList.add('active');
     fetchOrders();
   } else if (targetId === 'admin-section') {
     adminSec.classList.add('active-section');
     adminSec.classList.remove('inactive-section');
-    shopSec.classList.add('inactive-section');
-    shopSec.classList.remove('active-section');
-    orderSec.classList.add('inactive-section');
-    orderSec.classList.remove('active-section');
     heroBanner.classList.add('hidden');
     navAdmin.classList.add('active');
-    loadAdminProducts(); // Default view is products list
+    loadAdminProducts();
+  } else if (targetId === 'payment-section') {
+    paymentSec.classList.add('active-section');
+    paymentSec.classList.remove('inactive-section');
+    heroBanner.classList.add('hidden');
   }
 }
 
@@ -1034,9 +1037,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
   document.getElementById('checkout-form').addEventListener('submit', submitOrder);
 
-  // Payment Gateway Modal Event Listeners
-  document.getElementById('payment-gateway-close-btn').addEventListener('click', closePaymentGatewayModal);
-  document.getElementById('payment-gateway-overlay').addEventListener('click', closePaymentGatewayModal);
+  // Payment Section Event Listeners
+  document.getElementById('payment-back-btn').addEventListener('click', cancelPaymentFlow);
   document.getElementById('confirm-payment-btn').addEventListener('click', confirmGatewayPayment);
 
   // Admin Event Listeners
