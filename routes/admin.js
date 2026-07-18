@@ -144,47 +144,159 @@ router.delete('/products/:id', authMiddleware, adminAuth, async (req, res) => {
   }
 });
 
-// @route   POST /api/admin/scrape
-// @desc    Scrape and import products from external feed
-// @access  Private (Admin)
 router.post('/scrape', authMiddleware, adminAuth, async (req, res) => {
-  const { source } = req.body;
+  const { source, categoryFilter, customUrl, customCategory } = req.body;
+  const logs = [];
 
+  // CASE 1: Custom URL Scraper
+  if (customUrl) {
+    logs.push(`[Scraper] Starting scrape of custom product page: ${customUrl}`);
+    try {
+      logs.push(`[Network] Fetching custom page content...`);
+      const response = await fetch(customUrl, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error(`Server returned status code: ${response.status}`);
+      }
+
+      const html = await response.text();
+      logs.push(`[Network] Web page successfully downloaded. Parsing DOM metadata...`);
+
+      // Regex parser for Open Graph tags
+      const getMetaTag = (property) => {
+        const regex = new RegExp(`<meta[^>]*(?:property|name)=["']og:${property}["'][^>]*content=["']([^"']*)["']`, 'i');
+        const match = html.match(regex);
+        if (match) return match[1];
+
+        const altRegex = new RegExp(`<meta[^>]*content=["']([^"']*)["'][^>]*(?:property|name)=["']og:${property}["']`, 'i');
+        const altMatch = html.match(altRegex);
+        return altMatch ? altMatch[1] : '';
+      };
+
+      // Extracted metadata values
+      const title = getMetaTag('title') || html.match(/<title>([^<]*)<\/title>/i)?.[1]?.trim() || 'Imported Product';
+      const description = getMetaTag('description') || 'No description extracted from page metadata.';
+      const imageUrl = getMetaTag('image') || 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=500';
+      const category = (customCategory || 'Imported').trim();
+
+      // Attempt to guess price from standard price metadata
+      let price = 39.99; // Fallback default price
+      const priceRegexes = [
+        /<meta[^>]*(?:property|name)=["'](?:product:price:amount|twitter:misc1|price|og:price:amount)["'][^>]*content=["']([^"']*)["']/i,
+        /priceCurrency[^>]*content=["'][^"']*["'][^>]*price=["']([^"']*)["']/i,
+        /itemprop=["']price["'][^>]*content=["']([^"']*)["']/i
+      ];
+
+      for (const rx of priceRegexes) {
+        const match = html.match(rx);
+        if (match) {
+          const parsed = parseFloat(match[1].replace(/[^0-9.]/g, ''));
+          if (!isNaN(parsed)) {
+            price = parsed;
+            break;
+          }
+        }
+      }
+
+      const id = `scrape-custom-${Date.now()}`;
+      const stock = 100;
+
+      logs.push(`[Scraper] Successfully extracted data:`);
+      logs.push(`  * Title: "${title.substring(0, 40)}${title.length > 40 ? '...' : ''}"`);
+      logs.push(`  * Estimated Price: $${price.toFixed(2)}`);
+      logs.push(`  * Category Tag: "${category}"`);
+      logs.push(`  * Image Source: "${imageUrl.substring(0, 50)}..."`);
+      
+      logs.push(`[Database] Inserting product into database catalog...`);
+      await pool.query(`
+        INSERT INTO products (id, name, description, price, category, stock, image_url)
+        VALUES ($1, $2, $3, $4, $5, $6, $7)
+        ON CONFLICT (id)
+        DO UPDATE SET
+          name = EXCLUDED.name,
+          description = EXCLUDED.description,
+          price = EXCLUDED.price,
+          category = EXCLUDED.category,
+          image_url = EXCLUDED.image_url
+      `, [id, title, description, price, category, stock, imageUrl]);
+
+      logs.push(`[Success] Import complete! Product ID: ${id}`);
+      return res.json({
+        success: true,
+        logs,
+        count: 1,
+        products: [{ id, name: title, price, category, imageUrl }]
+      });
+    } catch (err) {
+      console.error('Custom scrape error:', err);
+      logs.push(`[Error] Custom URL Scrape failed: ${err.message}`);
+      return res.status(500).json({ success: false, message: 'Custom URL Scraper failed.', logs });
+    }
+  }
+
+  // CASE 2: Feed Bulk Importer (DummyJSON or FakeStoreAPI)
   if (!source || (source !== 'dummyjson' && source !== 'fakestore')) {
     return res.status(400).json({ message: 'Invalid or missing scraper source.' });
   }
 
-  const logs = [];
-  logs.push(`[Scraper] Starting scrape from source: ${source}`);
+  logs.push(`[Scraper] Starting bulk scrape from feed: ${source}`);
+  logs.push(`[Scraper] Category filter setting: ${categoryFilter || 'all'}`);
 
   try {
-    let url = '';
+    let urlsToFetch = [];
+    
     if (source === 'dummyjson') {
-      url = 'https://dummyjson.com/products?limit=15';
+      if (categoryFilter === 'electronics') {
+        urlsToFetch.push('https://dummyjson.com/products/category/smartphones');
+        urlsToFetch.push('https://dummyjson.com/products/category/laptops');
+      } else if (categoryFilter === 'shoes') {
+        urlsToFetch.push('https://dummyjson.com/products/category/mens-shoes');
+        urlsToFetch.push('https://dummyjson.com/products/category/womens-shoes');
+      } else if (categoryFilter === 'clothing') {
+        urlsToFetch.push('https://dummyjson.com/products/category/mens-shirts');
+        urlsToFetch.push('https://dummyjson.com/products/category/womens-dresses');
+      } else {
+        urlsToFetch.push('https://dummyjson.com/products?limit=15');
+      }
     } else {
-      url = 'https://fakestoreapi.com/products?limit=15';
+      // FakeStore API
+      if (categoryFilter === 'electronics') {
+        urlsToFetch.push('https://fakestoreapi.com/products/category/electronics');
+      } else if (categoryFilter === 'clothing') {
+        urlsToFetch.push("https://fakestoreapi.com/products/category/men's clothing");
+        urlsToFetch.push("https://fakestoreapi.com/products/category/women's clothing");
+      } else if (categoryFilter === 'shoes') {
+        logs.push(`[Info] FakeStore API has no shoes category. Importing Jewelry as placeholder accessories...`);
+        urlsToFetch.push('https://fakestoreapi.com/products/category/jewelery');
+      } else {
+        urlsToFetch.push('https://fakestoreapi.com/products?limit=15');
+      }
     }
 
-    logs.push(`[Scraper] Fetching feed from URL: ${url}`);
-    const response = await fetch(url);
-    if (!response.ok) {
-      throw new Error(`Feed request failed with status: ${response.status}`);
-    }
-
-    const data = await response.json();
     let rawProducts = [];
-
-    if (source === 'dummyjson') {
-      rawProducts = data.products || [];
-    } else {
-      rawProducts = data || [];
+    for (const fetchUrl of urlsToFetch) {
+      logs.push(`[Network] Fetching: ${fetchUrl}`);
+      const response = await fetch(fetchUrl);
+      if (!response.ok) {
+        throw new Error(`Feed request failed for URL: ${fetchUrl} (${response.status})`);
+      }
+      
+      const feedData = await response.json();
+      if (source === 'dummyjson') {
+        rawProducts = rawProducts.concat(feedData.products || []);
+      } else {
+        rawProducts = rawProducts.concat(feedData || []);
+      }
     }
 
-    logs.push(`[Scraper] Successfully loaded ${rawProducts.length} items from source feed.`);
+    logs.push(`[Scraper] Retrieved ${rawProducts.length} items from feed. Commencing database imports...`);
     const importedList = [];
 
     for (const item of rawProducts) {
-      // Map properties uniformly
       let id = '';
       let name = '';
       let description = '';
@@ -198,7 +310,18 @@ router.post('/scrape', authMiddleware, adminAuth, async (req, res) => {
         name = item.title;
         description = item.description || 'No description provided.';
         price = parseFloat(item.price) || 29.99;
-        category = item.category || 'Accessories';
+        
+        // Map category nice labels
+        if (item.category === 'smartphones' || item.category === 'laptops') {
+          category = 'Electronics';
+        } else if (item.category === 'mens-shoes' || item.category === 'womens-shoes') {
+          category = 'Shoes';
+        } else if (item.category === 'mens-shirts' || item.category === 'womens-dresses') {
+          category = 'Clothing';
+        } else {
+          category = item.category || 'Accessories';
+        }
+
         stock = parseInt(item.stock, 10) || 50;
         imageUrl = item.thumbnail || item.images?.[0] || 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=500';
       } else {
@@ -206,14 +329,23 @@ router.post('/scrape', authMiddleware, adminAuth, async (req, res) => {
         name = item.title;
         description = item.description || 'No description provided.';
         price = parseFloat(item.price) || 29.99;
-        category = item.category || 'Accessories';
+        
+        // Map category nice labels
+        if (item.category === 'electronics') {
+          category = 'Electronics';
+        } else if (item.category === "men's clothing" || item.category === "women's clothing") {
+          category = 'Clothing';
+        } else if (item.category === 'jewelery') {
+          category = 'Accessories';
+        } else {
+          category = item.category || 'Accessories';
+        }
+        
         stock = 80;
         imageUrl = item.image || 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=500';
       }
 
-      logs.push(`[Database] Upserting product: "${name.substring(0, 30)}..."`);
-      
-      // Upsert into database
+      logs.push(`[Database] Upserting: "${name.substring(0, 25)}..."`);
       await pool.query(`
         INSERT INTO products (id, name, description, price, category, stock, image_url)
         VALUES ($1, $2, $3, $4, $5, $6, $7)
@@ -238,7 +370,7 @@ router.post('/scrape', authMiddleware, adminAuth, async (req, res) => {
       products: importedList
     });
   } catch (err) {
-    console.error('Scrape error:', err);
+    console.error('Bulk scrape error:', err);
     logs.push(`[Error] Scraper process aborted: ${err.message}`);
     res.status(500).json({ success: false, message: 'Scrape process failed.', logs });
   }

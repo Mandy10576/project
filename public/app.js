@@ -290,9 +290,6 @@ function renderProducts() {
     grid.appendChild(card);
   });
 
-  // Initialize 3D Tilt effect
-  init3DTilt();
-
   // Attach cart listeners
   document.querySelectorAll('.add-to-cart-btn').forEach(btn => {
     btn.addEventListener('click', (e) => {
@@ -738,6 +735,7 @@ async function runScraper() {
   const consoleEl = document.getElementById('scraper-console');
   const runBtn = document.getElementById('run-scraper-btn');
   const source = document.getElementById('scraper-source-select').value;
+  const categoryFilter = document.getElementById('scraper-category-select').value;
 
   runBtn.disabled = true;
   consoleEl.innerHTML = '';
@@ -749,12 +747,13 @@ async function runScraper() {
 
   writeLog(`[System] Initializing Product Importer Feed Stream...`);
   writeLog(`[System] Selected source feed: ${source === 'dummyjson' ? 'DummyJSON API' : 'Fake Store API'}`);
+  writeLog(`[System] Filter category: ${categoryFilter}`);
   writeLog(`[Network] Contacting e-commerce sandbox endpoints...`);
 
   try {
     const res = await apiRequest('/api/admin/scrape', {
       method: 'POST',
-      body: JSON.stringify({ source })
+      body: JSON.stringify({ source, categoryFilter })
     });
 
     if (res.success) {
@@ -779,41 +778,59 @@ async function runScraper() {
   }
 }
 
-function init3DTilt() {
-  document.querySelectorAll('.product-card').forEach(card => {
-    card.addEventListener('mousemove', (e) => {
-      const rect = card.getBoundingClientRect();
-      const x = e.clientX - rect.left;
-      const y = e.clientY - rect.top;
-      
-      const centerX = rect.width / 2;
-      const centerY = rect.height / 2;
-      
-      const rotateX = ((centerY - y) / centerY) * 10; // max 10 degrees
-      const rotateY = ((x - centerX) / centerX) * 10; // max 10 degrees
-      
-      card.style.transform = `perspective(1000px) rotateX(${rotateX}deg) rotateY(${rotateY}deg) translateY(-8px)`;
-      
-      let shine = card.querySelector('.card-shine');
-      if (!shine) {
-        shine = document.createElement('div');
-        shine.className = 'card-shine';
-        card.appendChild(shine);
-      }
-      const shineX = (x / rect.width) * 100;
-      const shineY = (y / rect.height) * 100;
-      shine.style.background = `radial-gradient(circle at ${shineX}% ${shineY}%, rgba(0, 242, 254, 0.15) 0%, transparent 60%)`;
+async function runCustomScraper() {
+  const consoleEl = document.getElementById('scraper-console');
+  const runBtn = document.getElementById('run-custom-scraper-btn');
+  const customUrl = document.getElementById('scraper-custom-url').value.trim();
+  const customCategory = document.getElementById('scraper-custom-category').value.trim();
+
+  if (!customUrl) {
+    showToast('Please enter a product URL to scrape.', 'error');
+    return;
+  }
+
+  runBtn.disabled = true;
+  consoleEl.innerHTML = '';
+  
+  const writeLog = (text) => {
+    consoleEl.innerHTML += `${consoleEl.innerHTML ? '\n' : ''}${text}`;
+    consoleEl.scrollTop = consoleEl.scrollHeight;
+  };
+
+  writeLog(`[System] Initializing Custom URL Live Web Scraper...`);
+  writeLog(`[System] Target URL: ${customUrl}`);
+  writeLog(`[System] Custom Category Tag: ${customCategory || 'Imported'}`);
+
+  try {
+    const res = await apiRequest('/api/admin/scrape', {
+      method: 'POST',
+      body: JSON.stringify({ customUrl, customCategory })
     });
-    
-    card.addEventListener('mouseleave', () => {
-      card.style.transform = '';
-      const shine = card.querySelector('.card-shine');
-      if (shine) {
-        shine.style.background = 'transparent';
+
+    if (res.success) {
+      for (const log of res.logs) {
+        writeLog(log);
+        await new Promise(resolve => setTimeout(resolve, 80));
       }
-    });
-  });
+      writeLog(`\n[Success] Web page scraped and imported successfully!`);
+      showToast(`Scrape complete! Imported "${res.products[0].name.substring(0, 20)}..."`);
+      
+      // Clear input fields
+      document.getElementById('scraper-custom-url').value = '';
+      document.getElementById('scraper-custom-category').value = '';
+      
+      fetchProducts(); 
+    } else {
+      writeLog(`\n[Error] Scraper failed: ${res.message}`);
+    }
+  } catch (err) {
+    writeLog(`\n[Critical Error] Connection failed: ${err.message}`);
+  } finally {
+    runBtn.disabled = false;
+  }
 }
+
+
 
 async function loadAdminProducts() {
   const listContainer = document.getElementById('admin-products-list');
@@ -1263,4 +1280,5 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('admin-product-overlay').addEventListener('click', closeAdminProductModal);
   document.getElementById('admin-product-form').addEventListener('submit', handleProductSubmit);
   document.getElementById('run-scraper-btn').addEventListener('click', runScraper);
+  document.getElementById('run-custom-scraper-btn').addEventListener('click', runCustomScraper);
 });
