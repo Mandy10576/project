@@ -104,7 +104,7 @@ async function initDb() {
     await client.query(`
       CREATE TABLE IF NOT EXISTS products (
         id VARCHAR(50) PRIMARY KEY,
-        name VARCHAR(100) NOT NULL,
+        name VARCHAR(255) NOT NULL,
         description TEXT,
         price NUMERIC(10, 2) NOT NULL,
         category VARCHAR(50) NOT NULL,
@@ -151,6 +151,11 @@ async function initDb() {
     `);
 
     console.log('✅ Tables checked/created successfully.');
+
+    // Increase name column capacity to VARCHAR(255) for long custom products
+    await client.query(`
+      ALTER TABLE products ALTER COLUMN name TYPE VARCHAR(255);
+    `);
 
     // Grant Admin permissions automatically to mandeeprao10576@gmail.com
     await client.query(`

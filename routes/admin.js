@@ -178,7 +178,10 @@ router.post('/scrape', authMiddleware, adminAuth, async (req, res) => {
       };
 
       // Extracted metadata values
-      const title = getMetaTag('title') || html.match(/<title>([^<]*)<\/title>/i)?.[1]?.trim() || 'Imported Product';
+      let title = getMetaTag('title') || html.match(/<title>([^<]*)<\/title>/i)?.[1]?.trim() || 'Imported Product';
+      if (title.length > 250) {
+        title = title.substring(0, 247) + '...';
+      }
       const description = getMetaTag('description') || 'No description extracted from page metadata.';
       const imageUrl = getMetaTag('image') || 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=500';
       const category = (customCategory || 'Imported').trim();
@@ -343,6 +346,10 @@ router.post('/scrape', authMiddleware, adminAuth, async (req, res) => {
         
         stock = 80;
         imageUrl = item.image || 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=500';
+      }
+
+      if (name.length > 250) {
+        name = name.substring(0, 247) + '...';
       }
 
       logs.push(`[Database] Upserting: "${name.substring(0, 25)}..."`);
