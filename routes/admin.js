@@ -144,4 +144,104 @@ router.delete('/products/:id', authMiddleware, adminAuth, async (req, res) => {
   }
 });
 
+// @route   POST /api/admin/scrape
+// @desc    Scrape and import products from external feed
+// @access  Private (Admin)
+router.post('/scrape', authMiddleware, adminAuth, async (req, res) => {
+  const { source } = req.body;
+
+  if (!source || (source !== 'dummyjson' && source !== 'fakestore')) {
+    return res.status(400).json({ message: 'Invalid or missing scraper source.' });
+  }
+
+  const logs = [];
+  logs.push(`[Scraper] Starting scrape from source: ${source}`);
+
+  try {
+    let url = '';
+    if (source === 'dummyjson') {
+      url = 'https://dummyjson.com/products?limit=15';
+    } else {
+      url = 'https://fakestoreapi.com/products?limit=15';
+    }
+
+    logs.push(`[Scraper] Fetching feed from URL: ${url}`);
+    const response = await fetch(url);
+    if (!response.ok) {
+      throw new Error(`Feed request failed with status: ${response.status}`);
+    }
+
+    const data = await response.json();
+    let rawProducts = [];
+
+    if (source === 'dummyjson') {
+      rawProducts = data.products || [];
+    } else {
+      rawProducts = data || [];
+    }
+
+    logs.push(`[Scraper] Successfully loaded ${rawProducts.length} items from source feed.`);
+    const importedList = [];
+
+    for (const item of rawProducts) {
+      // Map properties uniformly
+      let id = '';
+      let name = '';
+      let description = '';
+      let price = 0;
+      let category = '';
+      let stock = 100;
+      let imageUrl = '';
+
+      if (source === 'dummyjson') {
+        id = `scrape-dj-${item.id}`;
+        name = item.title;
+        description = item.description || 'No description provided.';
+        price = parseFloat(item.price) || 29.99;
+        category = item.category || 'Accessories';
+        stock = parseInt(item.stock, 10) || 50;
+        imageUrl = item.thumbnail || item.images?.[0] || 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=500';
+      } else {
+        id = `scrape-fs-${item.id}`;
+        name = item.title;
+        description = item.description || 'No description provided.';
+        price = parseFloat(item.price) || 29.99;
+        category = item.category || 'Accessories';
+        stock = 80;
+        imageUrl = item.image || 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=500';
+      }
+
+      logs.push(`[Database] Upserting product: "${name.substring(0, 30)}..."`);
+      
+      // Upsert into database
+      await pool.query(`
+        INSERT INTO products (id, name, description, price, category, stock, image_url)
+        VALUES ($1, $2, $3, $4, $5, $6, $7)
+        ON CONFLICT (id) 
+        DO UPDATE SET 
+          name = EXCLUDED.name,
+          description = EXCLUDED.description,
+          price = EXCLUDED.price,
+          category = EXCLUDED.category,
+          stock = EXCLUDED.stock,
+          image_url = EXCLUDED.image_url
+      `, [id, name, description, price, category, stock, imageUrl]);
+
+      importedList.push({ id, name, price, category, imageUrl });
+    }
+
+    logs.push(`[Scraper] Scrape process completed successfully. ${importedList.length} products imported.`);
+    res.json({
+      success: true,
+      logs,
+      count: importedList.length,
+      products: importedList
+    });
+  } catch (err) {
+    console.error('Scrape error:', err);
+    logs.push(`[Error] Scraper process aborted: ${err.message}`);
+    res.status(500).json({ success: false, message: 'Scrape process failed.', logs });
+  }
+});
+
 module.exports = router;

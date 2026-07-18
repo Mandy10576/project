@@ -290,6 +290,9 @@ function renderProducts() {
     grid.appendChild(card);
   });
 
+  // Initialize 3D Tilt effect
+  init3DTilt();
+
   // Attach cart listeners
   document.querySelectorAll('.add-to-cart-btn').forEach(btn => {
     btn.addEventListener('click', (e) => {
@@ -704,22 +707,112 @@ function renderOrders(orders) {
 function toggleAdminTab(tabName) {
   const prodTab = document.getElementById('admin-tab-products');
   const orderTab = document.getElementById('admin-tab-orders');
+  const scraperTab = document.getElementById('admin-tab-scraper');
   const prodView = document.getElementById('admin-products-view');
   const orderView = document.getElementById('admin-orders-view');
+  const scraperView = document.getElementById('admin-scraper-view');
+
+  // Reset active classes
+  prodTab.classList.remove('active');
+  orderTab.classList.remove('active');
+  scraperTab.classList.remove('active');
+  prodView.classList.remove('active-view');
+  orderView.classList.remove('active-view');
+  scraperView.classList.remove('active-view');
 
   if (tabName === 'products') {
     prodTab.classList.add('active');
-    orderTab.classList.remove('active');
     prodView.classList.add('active-view');
-    orderView.classList.remove('active-view');
     loadAdminProducts();
-  } else {
-    prodTab.classList.remove('active');
+  } else if (tabName === 'orders') {
     orderTab.classList.add('active');
-    prodView.classList.remove('active-view');
     orderView.classList.add('active-view');
     loadAdminOrders();
+  } else if (tabName === 'scraper') {
+    scraperTab.classList.add('active');
+    scraperView.classList.add('active-view');
   }
+}
+
+async function runScraper() {
+  const consoleEl = document.getElementById('scraper-console');
+  const runBtn = document.getElementById('run-scraper-btn');
+  const source = document.getElementById('scraper-source-select').value;
+
+  runBtn.disabled = true;
+  consoleEl.innerHTML = '';
+  
+  const writeLog = (text) => {
+    consoleEl.innerHTML += `${consoleEl.innerHTML ? '\n' : ''}${text}`;
+    consoleEl.scrollTop = consoleEl.scrollHeight;
+  };
+
+  writeLog(`[System] Initializing Product Importer Feed Stream...`);
+  writeLog(`[System] Selected source feed: ${source === 'dummyjson' ? 'DummyJSON API' : 'Fake Store API'}`);
+  writeLog(`[Network] Contacting e-commerce sandbox endpoints...`);
+
+  try {
+    const res = await apiRequest('/api/admin/scrape', {
+      method: 'POST',
+      body: JSON.stringify({ source })
+    });
+
+    if (res.success) {
+      // Print backend logs to our interactive console with small delays to look like a live process!
+      for (const log of res.logs) {
+        writeLog(log);
+        // Wait 80ms to make it feel like real stream parsing!
+        await new Promise(resolve => setTimeout(resolve, 80));
+      }
+      writeLog(`\n[Success] Imported ${res.count} products successfully! Catalog refreshed.`);
+      showToast(`Scrape completed! ${res.count} items imported.`);
+      
+      // Refresh shop catalog
+      fetchProducts(); 
+    } else {
+      writeLog(`\n[Error] Importer failed: ${res.message}`);
+    }
+  } catch (err) {
+    writeLog(`\n[Critical Error] Connection failed: ${err.message}`);
+  } finally {
+    runBtn.disabled = false;
+  }
+}
+
+function init3DTilt() {
+  document.querySelectorAll('.product-card').forEach(card => {
+    card.addEventListener('mousemove', (e) => {
+      const rect = card.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const y = e.clientY - rect.top;
+      
+      const centerX = rect.width / 2;
+      const centerY = rect.height / 2;
+      
+      const rotateX = ((centerY - y) / centerY) * 10; // max 10 degrees
+      const rotateY = ((x - centerX) / centerX) * 10; // max 10 degrees
+      
+      card.style.transform = `perspective(1000px) rotateX(${rotateX}deg) rotateY(${rotateY}deg) translateY(-8px)`;
+      
+      let shine = card.querySelector('.card-shine');
+      if (!shine) {
+        shine = document.createElement('div');
+        shine.className = 'card-shine';
+        card.appendChild(shine);
+      }
+      const shineX = (x / rect.width) * 100;
+      const shineY = (y / rect.height) * 100;
+      shine.style.background = `radial-gradient(circle at ${shineX}% ${shineY}%, rgba(0, 242, 254, 0.15) 0%, transparent 60%)`;
+    });
+    
+    card.addEventListener('mouseleave', () => {
+      card.style.transform = '';
+      const shine = card.querySelector('.card-shine');
+      if (shine) {
+        shine.style.background = 'transparent';
+      }
+    });
+  });
 }
 
 async function loadAdminProducts() {
@@ -1164,8 +1257,10 @@ document.addEventListener('DOMContentLoaded', () => {
   // Admin Event Listeners
   document.getElementById('admin-tab-products').addEventListener('click', () => toggleAdminTab('products'));
   document.getElementById('admin-tab-orders').addEventListener('click', () => toggleAdminTab('orders'));
+  document.getElementById('admin-tab-scraper').addEventListener('click', () => toggleAdminTab('scraper'));
   document.getElementById('admin-add-product-btn').addEventListener('click', () => openAdminProductModal());
   document.getElementById('admin-product-close-btn').addEventListener('click', closeAdminProductModal);
   document.getElementById('admin-product-overlay').addEventListener('click', closeAdminProductModal);
   document.getElementById('admin-product-form').addEventListener('submit', handleProductSubmit);
+  document.getElementById('run-scraper-btn').addEventListener('click', runScraper);
 });
