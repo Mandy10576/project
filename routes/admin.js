@@ -177,32 +177,62 @@ router.post('/scrape', authMiddleware, adminAuth, async (req, res) => {
         return altMatch ? altMatch[1] : '';
       };
 
-      // Extracted metadata values
-      let title = getMetaTag('title') || html.match(/<title>([^<]*)<\/title>/i)?.[1]?.trim() || 'Imported Product';
+      // 1. Title Extraction (OG, Amazon-specific span, or generic title tag)
+      const ogTitle = getMetaTag('title');
+      const amazonTitleMatch = html.match(/<span[^>]*id=["']productTitle["'][^>]*>([^<]*)<\/span>/i);
+      const genericTitleMatch = html.match(/<title[^>]*>([^<]*)<\/title>/i);
+
+      let title = 'Imported Product';
+      if (ogTitle) {
+        title = ogTitle;
+      } else if (amazonTitleMatch) {
+        title = amazonTitleMatch[1];
+      } else if (genericTitleMatch) {
+        title = genericTitleMatch[1];
+      }
+      
+      title = title.replace(/\s+/g, ' ').trim();
       if (title.length > 250) {
         title = title.substring(0, 247) + '...';
       }
+
+      // 2. Image Extraction (OG image, Amazon landingImage, or Amazon CDN image patterns)
+      const ogImage = getMetaTag('image');
+      const amazonLandingImg = html.match(/id=["']landingImage["'][^>]*src=["']([^"']*)["']/i);
+      const amazonCdnImg = html.match(/["'](https:\/\/m\.media-amazon\.com\/images\/I\/[a-zA-Z0-9%_-]+\.(?:jpg|png|jpeg))["']/i);
+
+      let imageUrl = 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=500';
+      if (ogImage) {
+        imageUrl = ogImage;
+      } else if (amazonLandingImg) {
+        imageUrl = amazonLandingImg[1];
+      } else if (amazonCdnImg) {
+        imageUrl = amazonCdnImg[1];
+      }
+
       const description = getMetaTag('description') || 'No description extracted from page metadata.';
-      const imageUrl = getMetaTag('image') || 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=500';
       const category = (customCategory || 'Imported').trim();
 
-      // Attempt to guess price from standard price metadata
-      let price = 39.99; // Fallback default price
-      const priceRegexes = [
-        /<meta[^>]*(?:property|name)=["'](?:product:price:amount|twitter:misc1|price|og:price:amount)["'][^>]*content=["']([^"']*)["']/i,
-        /priceCurrency[^>]*content=["'][^"']*["'][^>]*price=["']([^"']*)["']/i,
-        /itemprop=["']price["'][^>]*content=["']([^"']*)["']/i
-      ];
+      // 3. Price Extraction (OG price tags, Amazon price tags, or standard price schemas)
+      let price = 39.99; // Default fallback price
+      const ogPrice = getMetaTag('price') || getMetaTag('price:amount');
+      const amazonPrice = html.match(/<span class=["']a-price-whole["']>([^<]*)<\/span>/i);
+      const genericPrice = html.match(/class=["']price["'][^>]*>([^<]*)/i);
 
-      for (const rx of priceRegexes) {
-        const match = html.match(rx);
-        if (match) {
-          const parsed = parseFloat(match[1].replace(/[^0-9.]/g, ''));
-          if (!isNaN(parsed)) {
-            price = parsed;
-            break;
-          }
-        }
+      if (ogPrice) {
+        const parsed = parseFloat(ogPrice.replace(/[^0-9.]/g, ''));
+        if (!isNaN(parsed)) price = parsed;
+      } else if (amazonPrice) {
+        const parsed = parseFloat(amazonPrice[1].replace(/[^0-9.]/g, ''));
+        if (!isNaN(parsed)) price = parsed;
+      } else if (genericPrice) {
+        const parsed = parseFloat(genericPrice[1].replace(/[^0-9.]/g, ''));
+        if (!isNaN(parsed)) price = parsed;
+      }
+
+      // Smart currency handling: If price is in INR (Rupees), convert to USD
+      if (price > 250) {
+        price = Math.round((price / 83.0) * 100) / 100;
       }
 
       const id = `scrape-custom-${Date.now()}`;
