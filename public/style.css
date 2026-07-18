@@ -1380,4 +1380,65 @@ button, input, select, textarea {
   }
 }
 
+/* ==========================================================================
+   CHECKOUT PAYMENT METHOD OPTIONS GRID
+   ========================================================================== */
+.payment-options-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+  margin-top: 8px;
+  width: 100%;
+}
+
+.payment-option-card {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--border-glass);
+  border-radius: 12px;
+  color: var(--text-gray);
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  cursor: pointer;
+  transition: var(--transition-smooth);
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.payment-option-card svg {
+  transition: var(--transition-smooth);
+  color: var(--text-muted);
+}
+
+.payment-option-card span {
+  font-size: 0.85rem;
+  font-weight: 500;
+}
+
+.payment-option-card:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text-white);
+  border-color: rgba(255, 255, 255, 0.15);
+}
+
+.payment-option-card:hover svg {
+  color: var(--text-white);
+}
+
+.payment-option-card.active {
+  background: rgba(0, 242, 254, 0.08);
+  border-color: var(--accent-cyan);
+  color: var(--accent-cyan);
+  box-shadow: 0 0 15px rgba(0, 242, 254, 0.1);
+}
+
+.payment-option-card.active svg {
+  transform: scale(1.1);
+  color: var(--accent-cyan);
+}
+
+
 

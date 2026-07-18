@@ -162,15 +162,26 @@
               <textarea id="shipping-address" rows="2" placeholder="123 Main St, Apt 4B, City, Country" required></textarea>
             </div>
             <div class="form-group">
-              <label for="payment-method">Payment Method</label>
-              <select id="payment-method">
-                <option value="Credit Card">Credit Card</option>
-                <option value="PayPal">PayPal</option>
-                <option value="Apple Pay">Apple Pay</option>
-                <option value="Google Pay">Google Pay</option>
-                <option value="Paytm">Paytm</option>
-                <option value="Cash on Delivery">Cash on Delivery</option>
-              </select>
+              <label style="display: block; margin-bottom: 8px; font-size: 0.85rem; color: var(--text-gray);">Payment Method</label>
+              <input type="hidden" id="payment-method" value="Google Pay">
+              <div class="payment-options-grid">
+                <button type="button" class="payment-option-card active" data-value="Google Pay" aria-label="Google Pay">
+                  <svg viewBox="0 0 24 24" width="24" height="24"><path d="M17 1.01L7 1c-1.1 0-2 .9-2 2v18c0 1.1.9 2 2 2h10c1.1 0 2-.9 2-2V3c0-1.1-.9-1.99-2-1.99zM17 19H7V5h10v14z" fill="currentColor"/><circle cx="12" cy="21" r="1" fill="currentColor"/></svg>
+                  <span>GPay</span>
+                </button>
+                <button type="button" class="payment-option-card" data-value="Paytm" aria-label="Paytm">
+                  <svg viewBox="0 0 24 24" width="24" height="24"><path d="M4 6H2v14c0 1.1.9 2 2 2h14v-2H4V6zm16-4H8c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H8V4h12v12z" fill="currentColor"/><path d="M12 10.5l-1.5-1.5L9 10.5l3 3 6-6-1.5-1.5z" fill="currentColor"/></svg>
+                  <span>Paytm</span>
+                </button>
+                <button type="button" class="payment-option-card" data-value="Debit Card" aria-label="Debit Card">
+                  <svg viewBox="0 0 24 24" width="24" height="24"><path d="M20 4H4c-1.11 0-1.99.89-1.99 2L2 18c0 1.11.89 2 2 2h16c1.11 0 2-.89 2-2V6c0-1.11-.89-2-2-2zm0 14H4v-6h16v6zm0-10H4V6h16v2z" fill="currentColor"/></svg>
+                  <span>Debit Card</span>
+                </button>
+                <button type="button" class="payment-option-card" data-value="Cash on Delivery" aria-label="Cash on Delivery">
+                  <svg viewBox="0 0 24 24" width="24" height="24"><path d="M20 8h-3V4H3c-1.1 0-2 .9-2 2v11h2c0 1.66 1.34 3 3 3s3-1.34 3-3h6c0 1.66 1.34 3 3 3s3-1.34 3-3h2v-5l-3-4zM6 18.5c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5zm13.5-9l2.25 3H17V9.5h2.5zM18 18.5c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5z" fill="currentColor"/></svg>
+                  <span>COD</span>
+                </button>
+              </div>
             </div>
             <button type="submit" id="submit-order-btn" class="btn btn-primary btn-block">Confirm & Pay</button>
           </form>

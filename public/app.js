@@ -962,6 +962,16 @@ document.addEventListener('DOMContentLoaded', () => {
     checkoutFormContainer.classList.remove('hidden');
   });
 
+  // Payment option card toggles
+  document.querySelectorAll('.payment-option-card').forEach(card => {
+    card.addEventListener('click', (e) => {
+      const button = e.currentTarget;
+      document.querySelectorAll('.payment-option-card').forEach(c => c.classList.remove('active'));
+      button.classList.add('active');
+      document.getElementById('payment-method').value = button.getAttribute('data-value');
+    });
+  });
+
   // Form Submissions
   document.getElementById('login-form').addEventListener('submit', (e) => {
     e.preventDefault();
