@@ -847,6 +847,10 @@ button, input, select, textarea {
   border-color: var(--accent-cyan);
   background: rgba(255, 255, 255, 0.08);
 }
+.form-group select option {
+  background: #0f121d; /* Solid dark background to fit the theme */
+  color: var(--text-white);
+}
 
 /* ==========================================================================
    AUTHENTICATION MODAL
