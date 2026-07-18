@@ -1440,5 +1440,28 @@ button, input, select, textarea {
   color: var(--accent-cyan);
 }
 
+/* ==========================================================================
+   PAYMENT PAGE CONTAINER
+   ========================================================================== */
+.payment-page-container {
+  max-width: 600px;
+  margin: 40px auto;
+  background: var(--bg-card);
+  border: 1px solid var(--border-glass);
+  border-radius: 16px;
+  padding: 40px;
+  box-shadow: var(--shadow-card);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  box-sizing: border-box;
+}
+
+@media (max-width: 640px) {
+  .payment-page-container {
+    margin: 20px 10px;
+    padding: 20px;
+  }
+}
+
 
 
