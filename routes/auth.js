@@ -4,6 +4,10 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { getUserByEmail, getUserById, createUser } = require('../data/dbService');
 const authMiddleware = require('../middleware/auth');
+const { OAuth2Client } = require('google-auth-library');
+
+const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || '343304830383-24ol8p9pp01ndnl33gr31h2848n9o4p2.apps.googleusercontent.com';
+const client = new OAuth2Client(GOOGLE_CLIENT_ID);
 
 const JWT_SECRET = process.env.JWT_SECRET || 'ecommerce_secret_key_change_this_in_production';
 
@@ -128,6 +132,72 @@ router.get('/profile', authMiddleware, async (req, res) => {
   } catch (error) {
     console.error('Profile fetch error:', error);
     res.status(500).json({ message: 'Server error fetching profile' });
+  }
+});
+
+// @route   POST /api/auth/google
+// @desc    Authenticate or register user with Google OAuth Token
+// @access  Public
+router.post('/google', async (req, res) => {
+  const { idToken } = req.body;
+
+  if (!idToken) {
+    return res.status(400).json({ message: 'Google ID Token is missing.' });
+  }
+
+  try {
+    // 1. Verify Google ID token
+    const ticket = await client.verifyIdToken({
+      idToken: idToken,
+      audience: GOOGLE_CLIENT_ID,
+      maxExpiry: 3900 // 65-minute buffer to account for minor system clock skew
+    });
+
+    const payload = ticket.getPayload();
+    const { email, name } = payload;
+
+    if (!email) {
+      return res.status(400).json({ message: 'Google account does not provide an email address.' });
+    }
+
+    // 2. Check if user already exists
+    let user = await getUserByEmail(email);
+
+    if (!user) {
+      // 3. Register user if they do not exist
+      const generatedPassword = Math.random().toString(36).substring(2) + Math.random().toString(36).substring(2);
+      const salt = await bcrypt.genSalt(10);
+      const hashedPassword = await bcrypt.hash(generatedPassword, salt);
+
+      user = await createUser({
+        id: `user-${Date.now()}`,
+        name: name || 'Google User',
+        email: email.toLowerCase(),
+        password: hashedPassword
+      });
+    }
+
+    // 4. Issue custom JWT for the user session
+    const jwtPayload = {
+      id: user.id,
+      email: user.email
+    };
+
+    jwt.sign(jwtPayload, JWT_SECRET, { expiresIn: '7d' }, (err, token) => {
+      if (err) throw err;
+      res.json({
+        token,
+        user: {
+          id: user.id,
+          name: user.name,
+          email: user.email
+        }
+      });
+    });
+
+  } catch (error) {
+    console.error('Google Auth validation error:', error);
+    res.status(400).json({ message: `Invalid Google login attempt: ${error.message}` });
   }
 });
 

@@ -1179,3 +1179,41 @@ button, input, select, textarea {
     width: 100%;
   }
 }
+
+/* ==========================================================================
+   GOOGLE AUTHENTICATION BUTTON STYLES
+   ========================================================================== */
+.auth-divider {
+  display: flex;
+  align-items: center;
+  text-align: center;
+  margin: 20px 0;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.auth-divider::before,
+.auth-divider::after {
+  content: '';
+  flex: 1;
+  border-bottom: 1px solid var(--border-glass);
+}
+
+.auth-divider::before {
+  margin-right: 1rem;
+}
+
+.auth-divider::after {
+  margin-left: 1rem;
+}
+
+.google-btn-container {
+  display: flex;
+  justify-content: center;
+  width: 100%;
+  margin-top: 15px;
+  background: transparent;
+}
+

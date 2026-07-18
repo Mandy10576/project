@@ -148,6 +148,56 @@ async function signup(name, email, password) {
   }
 }
 
+// ==========================================================================
+// GOOGLE SIGN-IN HANDLERS
+// ==========================================================================
+function initGoogleSignIn() {
+  if (typeof google === 'undefined') {
+    // If the library hasn't loaded yet, wait and try again
+    setTimeout(initGoogleSignIn, 100);
+    return;
+  }
+
+  google.accounts.id.initialize({
+    client_id: '343304830383-24ol8p9pp01ndnl33gr31h2848n9o4p2.apps.googleusercontent.com',
+    callback: handleGoogleLogin
+  });
+
+  google.accounts.id.renderButton(
+    document.getElementById('google-signin-btn'),
+    { 
+      theme: 'outline', 
+      size: 'large', 
+      width: '320', // Width matches the auth modal size
+      text: 'signin_with',
+      shape: 'pill'
+    }
+  );
+}
+
+async function handleGoogleLogin(googleResponse) {
+  try {
+    const data = await apiRequest('/api/auth/google', {
+      method: 'POST',
+      body: JSON.stringify({ idToken: googleResponse.credential })
+    });
+
+    state.token = data.token;
+    state.user = data.user;
+    localStorage.setItem('aether_token', data.token);
+
+    showToast(`Welcome, ${data.user.name}!`);
+    closeAuthModal();
+    updateAuthUI();
+    
+    // Sync cart and refresh UI
+    await syncCart();
+    fetchProducts(); 
+  } catch (error) {
+    showToast(error.message, 'error');
+  }
+}
+
 function logout() {
   state.token = null;
   state.user = null;
@@ -578,6 +628,7 @@ function toggleAuthTab(tab) {
 document.addEventListener('DOMContentLoaded', () => {
   // Check auth and sync cart on load
   initAuth();
+  initGoogleSignIn();
   fetchProducts();
 
   // Navigation Links
