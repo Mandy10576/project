@@ -95,6 +95,11 @@ async function initDb() {
       )
     `);
 
+    // Ensure is_admin column exists
+    await client.query(`
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS is_admin BOOLEAN DEFAULT FALSE
+    `);
+
     // 2. Products Table
     await client.query(`
       CREATE TABLE IF NOT EXISTS products (
@@ -147,6 +152,13 @@ async function initDb() {
 
     console.log('✅ Tables checked/created successfully.');
 
+    // Grant Admin permissions automatically to mandeeprao10576@gmail.com
+    await client.query(`
+      UPDATE users 
+      SET is_admin = TRUE 
+      WHERE LOWER(email) = 'mandeeprao10576@gmail.com'
+    `);
+
     // Seed products if table is empty
     const productCheck = await client.query('SELECT COUNT(*) FROM products');
     const productCount = parseInt(productCheck.rows[0].count, 10);
@@ -179,7 +191,7 @@ async function initDb() {
 
 async function getUserByEmail(email) {
   const { rows } = await pool.query(
-    'SELECT id, name, email, password, created_at AS "createdAt" FROM users WHERE LOWER(email) = LOWER($1)',
+    'SELECT id, name, email, password, is_admin AS "isAdmin", created_at AS "createdAt" FROM users WHERE LOWER(email) = LOWER($1)',
     [email]
   );
   return rows[0] || null;
@@ -187,7 +199,7 @@ async function getUserByEmail(email) {
 
 async function getUserById(id) {
   const { rows } = await pool.query(
-    'SELECT id, name, email, created_at AS "createdAt" FROM users WHERE id = $1',
+    'SELECT id, name, email, is_admin AS "isAdmin", created_at AS "createdAt" FROM users WHERE id = $1',
     [id]
   );
   return rows[0] || null;
@@ -197,7 +209,7 @@ async function createUser({ id, name, email, password }) {
   const { rows } = await pool.query(
     `INSERT INTO users (id, name, email, password) 
      VALUES ($1, $2, $3, $4) 
-     RETURNING id, name, email, created_at AS "createdAt"`,
+     RETURNING id, name, email, is_admin AS "isAdmin", created_at AS "createdAt"`,
     [id, name, email.toLowerCase(), password]
   );
   return rows[0];

@@ -86,9 +86,15 @@ async function initAuth() {
 function updateAuthUI() {
   const authNav = document.getElementById('auth-nav-container');
   const navOrders = document.getElementById('nav-orders');
+  const navAdmin = document.getElementById('nav-admin');
   
   if (state.user) {
     navOrders.classList.remove('hidden');
+    if (state.user.isAdmin) {
+      navAdmin.classList.remove('hidden');
+    } else {
+      navAdmin.classList.add('hidden');
+    }
     authNav.innerHTML = `
       <div class="nav-user-info">
         <span class="nav-username">Hello, ${state.user.name.split(' ')[0]}</span>
@@ -98,6 +104,7 @@ function updateAuthUI() {
     document.getElementById('logout-btn').addEventListener('click', logout);
   } else {
     navOrders.classList.add('hidden');
+    navAdmin.classList.add('hidden');
     authNav.innerHTML = `<button id="login-nav-btn" class="btn btn-secondary">Login</button>`;
     document.getElementById('login-nav-btn').addEventListener('click', openAuthModal);
   }
@@ -550,23 +557,267 @@ function renderOrders(orders) {
 }
 
 // ==========================================================================
+// ADMIN DASHBOARD LOGIC
+// ==========================================================================
+function toggleAdminTab(tabName) {
+  const prodTab = document.getElementById('admin-tab-products');
+  const orderTab = document.getElementById('admin-tab-orders');
+  const prodView = document.getElementById('admin-products-view');
+  const orderView = document.getElementById('admin-orders-view');
+
+  if (tabName === 'products') {
+    prodTab.classList.add('active');
+    orderTab.classList.remove('active');
+    prodView.classList.add('active-view');
+    orderView.classList.remove('active-view');
+    loadAdminProducts();
+  } else {
+    prodTab.classList.remove('active');
+    orderTab.classList.add('active');
+    prodView.classList.remove('active-view');
+    orderView.classList.add('active-view');
+    loadAdminOrders();
+  }
+}
+
+async function loadAdminProducts() {
+  const listContainer = document.getElementById('admin-products-list');
+  listContainer.innerHTML = '<div class="cart-empty-message">Loading products...</div>';
+  
+  try {
+    const products = await apiRequest('/api/products');
+    
+    let html = `
+      <table class="admin-table">
+        <thead>
+          <tr>
+            <th>Image</th>
+            <th>Name</th>
+            <th>Category</th>
+            <th>Price</th>
+            <th>Stock</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+    `;
+    
+    products.forEach(p => {
+      html += `
+        <tr>
+          <td><img src="${p.imageUrl || 'https://via.placeholder.com/40'}" class="product-thumb" alt="${p.name}"></td>
+          <td><strong>${p.name}</strong></td>
+          <td>${p.category}</td>
+          <td>$${p.price.toFixed(2)}</td>
+          <td>${p.stock}</td>
+          <td class="admin-actions">
+            <button class="btn btn-warning btn-xs edit-product-btn" data-id="${p.id}">Edit</button>
+            <button class="btn btn-danger btn-xs delete-product-btn" data-id="${p.id}">Delete</button>
+          </td>
+        </tr>
+      `;
+    });
+    
+    html += '</tbody></table>';
+    listContainer.innerHTML = html;
+
+    // Attach click listeners
+    document.querySelectorAll('.edit-product-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const id = e.target.getAttribute('data-id');
+        openAdminProductModal(id);
+      });
+    });
+
+    document.querySelectorAll('.delete-product-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const id = e.target.getAttribute('data-id');
+        if (confirm('Are you sure you want to delete this product?')) {
+          deleteProduct(id);
+        }
+      });
+    });
+
+  } catch (error) {
+    listContainer.innerHTML = `<div class="cart-empty-message" style="color: #ef4444;">Failed to load products: ${error.message}</div>`;
+  }
+}
+
+async function loadAdminOrders() {
+  const listContainer = document.getElementById('admin-orders-list');
+  listContainer.innerHTML = '<div class="cart-empty-message">Loading orders...</div>';
+  
+  try {
+    const orders = await apiRequest('/api/admin/orders');
+    
+    if (orders.length === 0) {
+      listContainer.innerHTML = '<div class="cart-empty-message">No orders placed yet.</div>';
+      return;
+    }
+
+    let html = `
+      <table class="admin-table">
+        <thead>
+          <tr>
+            <th>Order ID</th>
+            <th>Customer</th>
+            <th>Date</th>
+            <th>Total Price</th>
+            <th>Payment</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody>
+    `;
+    
+    orders.forEach(o => {
+      const date = new Date(o.createdAt).toLocaleDateString();
+      html += `
+        <tr>
+          <td><code>${o.id}</code></td>
+          <td>
+            <strong>${o.userName}</strong><br>
+            <span style="font-size: 0.8rem; color: var(--text-gray);">${o.userEmail}</span>
+          </td>
+          <td>${date}</td>
+          <td>$${o.totalPrice.toFixed(2)}</td>
+          <td>${o.paymentMethod}</td>
+          <td>
+            <select class="admin-status-select order-status-select" data-id="${o.id}">
+              <option value="Processing" ${o.status === 'Processing' ? 'selected' : ''}>Processing</option>
+              <option value="Shipped" ${o.status === 'Shipped' ? 'selected' : ''}>Shipped</option>
+              <option value="Delivered" ${o.status === 'Delivered' ? 'selected' : ''}>Delivered</option>
+              <option value="Cancelled" ${o.status === 'Cancelled' ? 'selected' : ''}>Cancelled</option>
+            </select>
+          </td>
+        </tr>
+      `;
+    });
+    
+    html += '</tbody></table>';
+    listContainer.innerHTML = html;
+
+    // Attach status change listeners
+    document.querySelectorAll('.order-status-select').forEach(select => {
+      select.addEventListener('change', async (e) => {
+        const id = e.target.getAttribute('data-id');
+        const newStatus = e.target.value;
+        await updateOrderStatus(id, newStatus);
+      });
+    });
+
+  } catch (error) {
+    listContainer.innerHTML = `<div class="cart-empty-message" style="color: #ef4444;">Failed to load orders: ${error.message}</div>`;
+  }
+}
+
+async function updateOrderStatus(id, status) {
+  try {
+    await apiRequest(`/api/admin/orders/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify({ status })
+    });
+    showToast('Order status updated successfully');
+  } catch (error) {
+    showToast(error.message, 'error');
+  }
+}
+
+async function deleteProduct(id) {
+  try {
+    await apiRequest(`/api/admin/products/${id}`, { method: 'DELETE' });
+    showToast('Product deleted successfully');
+    loadAdminProducts();
+  } catch (error) {
+    showToast(error.message, 'error');
+  }
+}
+
+async function openAdminProductModal(id = null) {
+  const modal = document.getElementById('admin-product-modal');
+  const form = document.getElementById('admin-product-form');
+  const title = document.getElementById('admin-modal-title');
+  
+  form.reset();
+  document.getElementById('admin-product-id').value = '';
+  
+  if (id) {
+    title.textContent = 'Edit Product';
+    try {
+      const product = await apiRequest(`/api/products/${id}`);
+      document.getElementById('admin-product-id').value = product.id;
+      document.getElementById('admin-product-name').value = product.name;
+      document.getElementById('admin-product-category').value = product.category;
+      document.getElementById('admin-product-price').value = product.price;
+      document.getElementById('admin-product-stock').value = product.stock;
+      document.getElementById('admin-product-image').value = product.imageUrl || '';
+      document.getElementById('admin-product-desc').value = product.description || '';
+    } catch (error) {
+      showToast(error.message, 'error');
+      return;
+    }
+  } else {
+    title.textContent = 'Add New Product';
+  }
+  
+  modal.classList.add('active');
+}
+
+function closeAdminProductModal() {
+  document.getElementById('admin-product-modal').classList.remove('active');
+}
+
+async function handleProductSubmit(e) {
+  e.preventDefault();
+  const id = document.getElementById('admin-product-id').value;
+  const name = document.getElementById('admin-product-name').value.trim();
+  const category = document.getElementById('admin-product-category').value;
+  const price = parseFloat(document.getElementById('admin-product-price').value);
+  const stock = parseInt(document.getElementById('admin-product-stock').value, 10);
+  const imageUrl = document.getElementById('admin-product-image').value.trim();
+  const description = document.getElementById('admin-product-desc').value.trim();
+  
+  const body = { name, category, price, stock, imageUrl, description };
+  const endpoint = id ? `/api/admin/products/${id}` : '/api/admin/products';
+  const method = id ? 'PUT' : 'POST';
+  
+  try {
+    await apiRequest(endpoint, {
+      method,
+      body: JSON.stringify(body)
+    });
+    showToast(`Product ${id ? 'updated' : 'created'} successfully`);
+    closeAdminProductModal();
+    loadAdminProducts();
+    fetchProducts(); // refresh the main shop catalog too
+  } catch (error) {
+    showToast(error.message, 'error');
+  }
+}
+
+// ==========================================================================
 // NAVIGATION & PAGE SECTION TOGGLE
 // ==========================================================================
 function switchSection(targetId) {
   const shopSec = document.getElementById('shop-section');
   const orderSec = document.getElementById('orders-section');
+  const adminSec = document.getElementById('admin-section');
   const heroBanner = document.getElementById('hero-banner');
   const navShop = document.getElementById('nav-shop');
   const navOrders = document.getElementById('nav-orders');
+  const navAdmin = document.getElementById('nav-admin');
 
   navShop.classList.remove('active');
   navOrders.classList.remove('active');
+  navAdmin.classList.remove('active');
 
   if (targetId === 'shop-section') {
     shopSec.classList.add('active-section');
     shopSec.classList.remove('inactive-section');
     orderSec.classList.add('inactive-section');
     orderSec.classList.remove('active-section');
+    adminSec.classList.add('inactive-section');
+    adminSec.classList.remove('active-section');
     heroBanner.classList.remove('hidden');
     navShop.classList.add('active');
   } else if (targetId === 'orders-section') {
@@ -574,9 +825,21 @@ function switchSection(targetId) {
     orderSec.classList.remove('inactive-section');
     shopSec.classList.add('inactive-section');
     shopSec.classList.remove('active-section');
+    adminSec.classList.add('inactive-section');
+    adminSec.classList.remove('active-section');
     heroBanner.classList.add('hidden');
     navOrders.classList.add('active');
     fetchOrders();
+  } else if (targetId === 'admin-section') {
+    adminSec.classList.add('active-section');
+    adminSec.classList.remove('inactive-section');
+    shopSec.classList.add('inactive-section');
+    shopSec.classList.remove('active-section');
+    orderSec.classList.add('inactive-section');
+    orderSec.classList.remove('active-section');
+    heroBanner.classList.add('hidden');
+    navAdmin.classList.add('active');
+    loadAdminProducts(); // Default view is products list
   }
 }
 
@@ -643,6 +906,10 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('nav-orders').addEventListener('click', (e) => {
     e.preventDefault();
     switchSection('orders-section');
+  });
+  document.getElementById('nav-admin').addEventListener('click', (e) => {
+    e.preventDefault();
+    switchSection('admin-section');
   });
   document.getElementById('hero-cta-btn').addEventListener('click', () => {
     document.getElementById('shop-section').scrollIntoView({ behavior: 'smooth' });
@@ -712,4 +979,12 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   document.getElementById('checkout-form').addEventListener('submit', submitOrder);
+
+  // Admin Event Listeners
+  document.getElementById('admin-tab-products').addEventListener('click', () => toggleAdminTab('products'));
+  document.getElementById('admin-tab-orders').addEventListener('click', () => toggleAdminTab('orders'));
+  document.getElementById('admin-add-product-btn').addEventListener('click', () => openAdminProductModal());
+  document.getElementById('admin-product-close-btn').addEventListener('click', closeAdminProductModal);
+  document.getElementById('admin-product-overlay').addEventListener('click', closeAdminProductModal);
+  document.getElementById('admin-product-form').addEventListener('submit', handleProductSubmit);
 });

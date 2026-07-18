@@ -32,6 +32,7 @@
       <nav class="main-nav">
         <a href="#" id="nav-shop" class="nav-link active">Shop</a>
         <a href="#" id="nav-orders" class="nav-link hidden">My Orders</a>
+        <a href="#" id="nav-admin" class="nav-link hidden">Admin Panel</a>
         
         <button id="cart-toggle-btn" class="cart-btn" aria-label="Open cart">
           <svg viewBox="0 0 24 24" width="20" height="20"><path fill="none" d="M0 0h24v24H0z"/><path d="M4 16V4H2V2h3a1 1 0 0 1 1 1v12h12.438l2-8H8V5h13.72a1 1 0 0 1 .97 1.243l-2.5 10a1 1 0 0 1-.97.757H5a1 1 0 0 1-1-1zm2 5a1.5 1.5 0 1 1 3 0 1.5 1.5 0 0 1-3 0zm10 0a1.5 1.5 0 1 1 3 0 1.5 1.5 0 0 1-3 0z" fill="currentColor"/></svg>
@@ -101,6 +102,34 @@
         <!-- Orders will load dynamically via JS -->
       </div>
     </section>
+
+    <!-- Admin Section -->
+    <section id="admin-section" class="inactive-section">
+      <div class="admin-header">
+        <h2 class="section-title">Admin Dashboard</h2>
+        <button id="admin-add-product-btn" class="btn btn-primary">+ Add Product</button>
+      </div>
+
+      <!-- Admin Tabs to toggle between Products and Orders -->
+      <div class="admin-tabs">
+        <button id="admin-tab-products" class="admin-tab active">Manage Products</button>
+        <button id="admin-tab-orders" class="admin-tab">Manage Orders</button>
+      </div>
+
+      <!-- Products Management Sub-section -->
+      <div id="admin-products-view" class="admin-view active-view">
+        <div id="admin-products-list" class="admin-list-container">
+          <!-- Load products table/cards dynamically -->
+        </div>
+      </div>
+
+      <!-- Orders Management Sub-section -->
+      <div id="admin-orders-view" class="admin-view">
+        <div id="admin-orders-list" class="admin-list-container">
+          <!-- Load all users' orders dynamically -->
+        </div>
+      </div>
+    </section>
   </main>
 
   <!-- Shopping Cart Side Drawer -->
@@ -138,6 +167,8 @@
                 <option value="Credit Card">Credit Card</option>
                 <option value="PayPal">PayPal</option>
                 <option value="Apple Pay">Apple Pay</option>
+                <option value="Google Pay">Google Pay</option>
+                <option value="Paytm">Paytm</option>
                 <option value="Cash on Delivery">Cash on Delivery</option>
               </select>
             </div>
@@ -206,6 +237,54 @@
       <div class="google-btn-container">
         <div id="google-signin-btn"></div>
       </div>
+    </div>
+  </div>
+
+  <!-- Admin Product Modal (Add / Edit Product) -->
+  <div id="admin-product-modal" class="modal">
+    <div class="modal-overlay" id="admin-product-overlay"></div>
+    <div class="modal-content glassmorphic">
+      <div class="modal-header">
+        <h3 id="admin-modal-title">Add New Product</h3>
+        <button id="admin-product-close-btn" class="close-btn" aria-label="Close modal">
+          <svg viewBox="0 0 24 24" width="24" height="24"><path fill="none" d="M0 0h24v24H0z"/><path d="M12 10.586l4.95-4.95 1.414 1.414-4.95 4.95 4.95 4.95-1.414 1.414-4.95-4.95-4.95 4.95-1.414-1.414 4.95-4.95-4.95-4.95L7.05 5.636z" fill="currentColor"/></svg>
+        </button>
+      </div>
+
+      <form id="admin-product-form" class="auth-form active-form">
+        <input type="hidden" id="admin-product-id">
+        <div class="form-group">
+          <label for="admin-product-name">Product Name</label>
+          <input type="text" id="admin-product-name" required>
+        </div>
+        <div class="form-group">
+          <label for="admin-product-category">Category</label>
+          <select id="admin-product-category" required>
+            <option value="Electronics">Electronics</option>
+            <option value="Audio">Audio</option>
+            <option value="Footwear">Footwear</option>
+            <option value="Accessories">Accessories</option>
+            <option value="Furniture">Furniture</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="admin-product-price">Price ($)</label>
+          <input type="number" id="admin-product-price" step="0.01" min="0" required>
+        </div>
+        <div class="form-group">
+          <label for="admin-product-stock">Stock Quantity</label>
+          <input type="number" id="admin-product-stock" min="0" required>
+        </div>
+        <div class="form-group">
+          <label for="admin-product-image">Image URL</label>
+          <input type="url" id="admin-product-image" placeholder="https://images.unsplash.com/...">
+        </div>
+        <div class="form-group">
+          <label for="admin-product-desc">Description</label>
+          <textarea id="admin-product-desc" rows="3"></textarea>
+        </div>
+        <button type="submit" id="admin-product-submit-btn" class="btn btn-primary btn-block">Save Product</button>
+      </form>
     </div>
   </div>
 

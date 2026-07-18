@@ -58,7 +58,8 @@ router.post('/signup', async (req, res) => {
         user: {
           id: newUser.id,
           name: newUser.name,
-          email: newUser.email
+          email: newUser.email,
+          isAdmin: newUser.isAdmin
         }
       });
     });
@@ -106,7 +107,8 @@ router.post('/login', async (req, res) => {
         user: {
           id: user.id,
           name: user.name,
-          email: user.email
+          email: user.email,
+          isAdmin: user.isAdmin
         }
       });
     });
@@ -190,7 +192,8 @@ router.post('/google', async (req, res) => {
         user: {
           id: user.id,
           name: user.name,
-          email: user.email
+          email: user.email,
+          isAdmin: user.isAdmin
         }
       });
     });
