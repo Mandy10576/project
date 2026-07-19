@@ -292,6 +292,9 @@
           <label for="login-password">Password</label>
           <input type="password" id="login-password" placeholder="••••••••" required>
         </div>
+        <div style="text-align: right; margin-top: -10px; margin-bottom: 15px;">
+          <a href="#" id="forgot-password-link" style="color: var(--accent-cyan); font-size: 0.8rem; text-decoration: none;">Forgot Password?</a>
+        </div>
         <button type="submit" class="btn btn-primary btn-block">Sign In</button>
       </form>
 
@@ -320,6 +323,42 @@
 
         <button type="button" id="signup-send-otp-btn" class="btn btn-secondary btn-block" style="margin-top: 10px;">Send Verification OTP</button>
         <button type="submit" id="signup-submit-btn" class="btn btn-primary btn-block hidden" style="margin-top: 10px;">Verify & Create Account</button>
+      </form>
+
+      <!-- Forgot Password Form -->
+      <form id="forgot-password-form" class="auth-form">
+        <h3 class="auth-title">Reset Password</h3>
+        <p class="auth-subtitle">Verify your email to create a new password.</p>
+        
+        <!-- Step 1: Enter email to request OTP -->
+        <div id="forgot-email-step">
+          <div class="form-group">
+            <label for="forgot-email">Email Address</label>
+            <input type="email" id="forgot-email" placeholder="email@example.com" required>
+          </div>
+          <button type="button" id="forgot-send-otp-btn" class="btn btn-primary btn-block">Send Reset OTP</button>
+        </div>
+
+        <!-- Step 2: Enter OTP & New Password (initially hidden) -->
+        <div id="forgot-reset-step" class="hidden">
+          <div class="form-group" style="border: 1px solid var(--border-glass); padding: 15px; border-radius: 8px; background: rgba(0, 242, 254, 0.02); margin-bottom: 15px;">
+            <label for="forgot-otp" style="color: var(--accent-cyan); display: block; margin-bottom: 6px; font-weight: bold; font-size: 0.85rem;">Enter 6-Digit Reset Code</label>
+            <input type="text" id="forgot-otp" maxlength="6" placeholder="123456" style="text-align: center; letter-spacing: 5px; font-size: 1.2rem; font-weight: bold; box-sizing: border-box; width: 100%; height: 42px; border-radius: 8px; border: 1px solid var(--accent-cyan); background: rgba(0,0,0,0.3); color: var(--text-white); outline: none;">
+          </div>
+          <div class="form-group">
+            <label for="forgot-new-password">New Password (min 6 chars)</label>
+            <input type="password" id="forgot-new-password" minlength="6" placeholder="••••••••" required>
+          </div>
+          <div class="form-group">
+            <label for="forgot-confirm-password">Confirm Password</label>
+            <input type="password" id="forgot-confirm-password" minlength="6" placeholder="••••••••" required>
+          </div>
+          <button type="submit" id="forgot-submit-btn" class="btn btn-primary btn-block">Reset & Sign In</button>
+        </div>
+
+        <div style="text-align: center; margin-top: 20px;">
+          <a href="#" id="forgot-back-to-login" style="color: var(--accent-cyan); font-size: 0.85rem; text-decoration: none;">&larr; Back to Login</a>
+        </div>
       </form>
       
       <!-- Divider & Google Sign-In -->

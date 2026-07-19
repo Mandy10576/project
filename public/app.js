@@ -180,6 +180,64 @@ async function sendOtp(email) {
   }
 }
 
+function showForgotPasswordForm() {
+  document.getElementById('tab-login').classList.remove('active');
+  document.getElementById('tab-signup').classList.remove('active');
+  document.getElementById('login-form').classList.remove('active-form');
+  document.getElementById('signup-form').classList.remove('active-form');
+  
+  const forgotForm = document.getElementById('forgot-password-form');
+  forgotForm.classList.add('active-form');
+  
+  forgotForm.reset();
+  document.getElementById('forgot-email-step').classList.remove('hidden');
+  document.getElementById('forgot-reset-step').classList.add('hidden');
+}
+
+async function sendForgotOtp(email) {
+  const sendBtn = document.getElementById('forgot-send-otp-btn');
+  sendBtn.disabled = true;
+  sendBtn.textContent = 'Sending OTP...';
+
+  try {
+    const res = await apiRequest('/api/auth/forgot-password', {
+      method: 'POST',
+      body: JSON.stringify({ email })
+    });
+
+    showToast(res.message || 'OTP verification code sent successfully!');
+    document.getElementById('forgot-email-step').classList.add('hidden');
+    document.getElementById('forgot-reset-step').classList.remove('hidden');
+  } catch (error) {
+    showToast(error.message, 'error');
+  } finally {
+    sendBtn.disabled = false;
+    sendBtn.textContent = 'Send Reset OTP';
+  }
+}
+
+async function resetPassword(email, otp, newPassword) {
+  try {
+    const data = await apiRequest('/api/auth/reset-password', {
+      method: 'POST',
+      body: JSON.stringify({ email, otp, newPassword })
+    });
+
+    state.token = data.token;
+    state.user = data.user;
+    localStorage.setItem('aether_token', data.token);
+
+    showToast(data.message || 'Password reset successfully!');
+    closeAuthModal();
+    updateAuthUI();
+    
+    await syncCart();
+    fetchProducts();
+  } catch (error) {
+    showToast(error.message, 'error');
+  }
+}
+
 // ==========================================================================
 // GOOGLE SIGN-IN HANDLERS
 // ==========================================================================
@@ -1144,6 +1202,13 @@ function closeAuthModal() {
   document.getElementById('login-form').reset();
   document.getElementById('signup-form').reset();
   
+  const forgotForm = document.getElementById('forgot-password-form');
+  if (forgotForm) {
+    forgotForm.reset();
+    document.getElementById('forgot-email-step').classList.remove('hidden');
+    document.getElementById('forgot-reset-step').classList.add('hidden');
+  }
+  
   // Reset OTP registration fields
   document.getElementById('signup-otp-group').classList.add('hidden');
   document.getElementById('signup-submit-btn').classList.add('hidden');
@@ -1156,6 +1221,11 @@ function toggleAuthTab(tab) {
   const signupTab = document.getElementById('tab-signup');
   const loginForm = document.getElementById('login-form');
   const signupForm = document.getElementById('signup-form');
+  const forgotForm = document.getElementById('forgot-password-form');
+
+  if (forgotForm) {
+    forgotForm.classList.remove('active-form');
+  }
 
   if (tab === 'login') {
     loginTab.classList.add('active');
@@ -1312,7 +1382,48 @@ document.addEventListener('DOMContentLoaded', () => {
     sendOtp(email);
   });
 
+  // Forgot Password Event Listeners
+  document.getElementById('forgot-password-link').addEventListener('click', (e) => {
+    e.preventDefault();
+    showForgotPasswordForm();
+  });
 
+  document.getElementById('forgot-back-to-login').addEventListener('click', (e) => {
+    e.preventDefault();
+    toggleAuthTab('login');
+  });
+
+  document.getElementById('forgot-send-otp-btn').addEventListener('click', () => {
+    const email = document.getElementById('forgot-email').value.trim();
+    if (!email) {
+      showToast('Please enter your email address.', 'error');
+      return;
+    }
+    sendForgotOtp(email);
+  });
+
+  document.getElementById('forgot-password-form').addEventListener('submit', (e) => {
+    e.preventDefault();
+    const email = document.getElementById('forgot-email').value.trim();
+    const otp = document.getElementById('forgot-otp').value.trim();
+    const newPassword = document.getElementById('forgot-new-password').value;
+    const confirmPassword = document.getElementById('forgot-confirm-password').value;
+
+    if (!email || !otp || !newPassword || !confirmPassword) {
+      showToast('Please fill out all fields.', 'error');
+      return;
+    }
+    if (newPassword.length < 6) {
+      showToast('Password must be at least 6 characters.', 'error');
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      showToast('Passwords do not match.', 'error');
+      return;
+    }
+
+    resetPassword(email, otp, newPassword);
+  });
 
   // Payment Section Event Listeners
   document.getElementById('payment-back-btn').addEventListener('click', cancelPaymentFlow);

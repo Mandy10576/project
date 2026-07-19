@@ -324,4 +324,165 @@ router.post('/google', async (req, res) => {
   }
 });
 
+// @route   POST /api/auth/forgot-password
+// @desc    Generate and send 6-digit OTP code to email for password reset
+// @access  Public
+router.post('/forgot-password', async (req, res) => {
+  const { email } = req.body;
+
+  if (!email) {
+    return res.status(400).json({ message: 'Please enter your email address' });
+  }
+
+  try {
+    // Check if user exists
+    const user = await getUserByEmail(email);
+    if (!user) {
+      return res.status(404).json({ message: 'No account found with this email address' });
+    }
+
+    // Generate random 6-digit verification code
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+
+    // Store/update verification code in email_otps table
+    await pool.query(`
+      INSERT INTO email_otps (email, otp, created_at)
+      VALUES ($1, $2, CURRENT_TIMESTAMP)
+      ON CONFLICT (email)
+      DO UPDATE SET otp = EXCLUDED.otp, created_at = CURRENT_TIMESTAMP
+    `, [email.toLowerCase(), otp]);
+
+    const transporter = getTransporter();
+
+    if (transporter) {
+      const mailOptions = {
+        from: `"${process.env.EMAIL_FROM_NAME || 'AETHER Shop'}" <${process.env.SMTP_USER}>`,
+        to: email.toLowerCase(),
+        subject: '🔒 AETHER Password Reset Verification Code',
+        text: `Your password reset verification code is: ${otp}. It will expire in 10 minutes.`,
+        html: `
+          <div style="font-family: Arial, sans-serif; padding: 20px; background-color: #0d0e15; color: #ffffff; border-radius: 12px; border: 1px solid #1f2d3d; max-width: 500px; margin: auto;">
+            <h2 style="color: #00f2fe; text-align: center; border-bottom: 1px solid #1f2d3d; padding-bottom: 10px; font-family: 'Outfit', sans-serif;">AETHER SECURITY CORE</h2>
+            <p style="font-size: 0.95rem; line-height: 1.5;">Hello,</p>
+            <p style="font-size: 0.95rem; line-height: 1.5;">You requested a password reset. Enter the verification code below on the reset screen to change your password:</p>
+            <div style="background-color: #07080d; padding: 15px; border-radius: 8px; text-align: center; font-size: 24px; font-weight: bold; color: #00f2fe; letter-spacing: 5px; margin: 20px 0; border: 1px dashed var(--border-glass);">
+              ${otp}
+            </div>
+            <p style="font-size: 0.8rem; color: #8f9cae; text-align: center;">This code will expire in 10 minutes. If you did not request this, please ignore this email.</p>
+          </div>
+        `
+      };
+
+      await transporter.sendMail(mailOptions);
+      console.log(`✉️ Real Password Reset OTP email sent successfully to: ${email}`);
+      return res.json({ success: true, message: 'Verification OTP sent to your email.' });
+    } else {
+      // Sandbox fallback mode: print code to terminal and output file
+      console.log(`\n========================================`);
+      console.log(`🔑 [OTP Password Reset Sandbox Mock Mode]`);
+      console.log(`Recipient: ${email}`);
+      console.log(`Password Reset OTP Code: ${otp}`);
+      console.log(`========================================\n`);
+
+      const fs = require('fs');
+      fs.writeFileSync('otp-code.txt', `Email: ${email}\nPassword Reset OTP Code: ${otp}\nGenerated At: ${new Date().toLocaleString()}`);
+
+      return res.json({
+        success: true,
+        mockMode: true,
+        message: 'Password reset OTP generated! (Sandbox Mode: code printed in server terminal and saved to otp-code.txt file).'
+      });
+    }
+
+  } catch (error) {
+    console.error('Forgot password error:', error);
+    res.status(500).json({ message: 'Server error generating password reset code' });
+  }
+});
+
+// @route   POST /api/auth/reset-password
+// @desc    Verify OTP and reset password
+// @access  Public
+router.post('/reset-password', async (req, res) => {
+  const { email, otp, newPassword } = req.body;
+
+  if (!email || !otp || !newPassword) {
+    return res.status(400).json({ message: 'Please enter all fields including verification code and new password' });
+  }
+
+  if (newPassword.length < 6) {
+    return res.status(400).json({ message: 'Password must be at least 6 characters long' });
+  }
+
+  try {
+    // 1. Fetch OTP row
+    const { rows: otpRows } = await pool.query(
+      'SELECT otp, created_at FROM email_otps WHERE email = $1',
+      [email.toLowerCase()]
+    );
+
+    if (otpRows.length === 0) {
+      return res.status(400).json({ message: 'Verification code not found or expired. Please request a new OTP.' });
+    }
+
+    const { otp: storedOtp, created_at: createdAt } = otpRows[0];
+
+    // Check if matching
+    if (storedOtp !== otp.trim()) {
+      return res.status(400).json({ message: 'Invalid verification code. Please check and try again.' });
+    }
+
+    // Check if expired (10 minutes)
+    const timeDiff = Date.now() - new Date(createdAt).getTime();
+    if (timeDiff > 10 * 60 * 1000) {
+      await pool.query('DELETE FROM email_otps WHERE email = $1', [email.toLowerCase()]);
+      return res.status(400).json({ message: 'Verification code has expired. Please request a new OTP.' });
+    }
+
+    // Clear verification code
+    await pool.query('DELETE FROM email_otps WHERE email = $1', [email.toLowerCase()]);
+
+    // Check if user exists
+    const user = await getUserByEmail(email);
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    // Hash new password
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(newPassword, salt);
+
+    // Update password in database
+    await pool.query(
+      'UPDATE users SET password = $1 WHERE id = $2',
+      [hashedPassword, user.id]
+    );
+
+    // Auto-login after password reset or return token
+    const payload = {
+      id: user.id,
+      email: user.email
+    };
+
+    jwt.sign(payload, JWT_SECRET, { expiresIn: '7d' }, (err, token) => {
+      if (err) throw err;
+      res.json({
+        success: true,
+        message: 'Password reset successfully!',
+        token,
+        user: {
+          id: user.id,
+          name: user.name,
+          email: user.email,
+          isAdmin: user.isAdmin
+        }
+      });
+    });
+
+  } catch (error) {
+    console.error('Reset password error:', error);
+    res.status(500).json({ message: 'Server error resetting password' });
+  }
+});
+
 module.exports = router;
